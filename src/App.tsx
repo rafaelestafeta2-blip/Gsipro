@@ -93,6 +93,15 @@ export default function App() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Map<string, any>>(new Map());
   const [isMessengerOpen, setIsMessengerOpen] = useState(false);
+  const [messengerTab, setMessengerTab] = useState<'direct' | 'groups'>('groups');
+  const [messengerTargetUserId, setMessengerTargetUserId] = useState<string | undefined>(undefined);
+
+  const handleOpenMessenger = (tab: 'direct' | 'groups' = 'groups', targetUserId?: string) => {
+    setMessengerTab(tab);
+    setMessengerTargetUserId(targetUserId);
+    setIsMessengerOpen(true);
+    setUnreadMsgCount(0);
+  };
   const [isImmersive, setIsImmersive] = useState(false);
   const [isFCMModalOpen, setIsFCMModalOpen] = useState(false);
   const [fcmRegistered, setFcmRegistered] = useState(!!localStorage.getItem('gsi_fcm_token'));
@@ -942,7 +951,7 @@ export default function App() {
         </header>
       )}
 
-      <main className={`${isImmersive ? 'px-0 pt-0 pb-0' : 'px-6'} space-y-8 relative z-10`}>
+      <main className={`${isImmersive ? 'px-0 pt-0 pb-0' : 'px-6 pb-28'} space-y-8 relative z-10`}>
         <AnimatePresence mode="wait">
           {activeTab === 'home' && (
             <motion.div 
@@ -1084,9 +1093,7 @@ export default function App() {
                 userName={userName}
                 userAvatar={profile?.avatar_url}
                 onToggleImmersive={(open) => setIsImmersive(open)}
-                onOpenMessenger={() => {
-                  setIsMessengerOpen(true);
-                }}
+                onOpenMessenger={(tab, userId) => handleOpenMessenger(tab, userId)}
               />
             </motion.div>
           )}
@@ -1201,6 +1208,8 @@ export default function App() {
             currentUserId={session.user.id} 
             userName={userName}
             userAvatar={profile?.avatar_url}
+            initialTab={messengerTab}
+            initialDirectUserId={messengerTargetUserId}
             onClose={() => setIsMessengerOpen(false)} 
             onlineUsers={onlineUsers}
             incomingCallSignal={incomingCallSignal}

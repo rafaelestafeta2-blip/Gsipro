@@ -107,14 +107,20 @@ export default function Society({
           <Users size={14} /> Equipa
         </button>
         <button 
-          onClick={() => setActiveTab('groups')}
+          onClick={() => {
+            if (onOpenMessenger) {
+              onOpenMessenger('groups');
+            } else {
+              setActiveTab('groups');
+            }
+          }}
           className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'groups' ? 'bg-[#d4af37] text-black shadow-lg' : 'text-white/40 hover:text-white'}`}
         >
           <MessageSquare size={14} /> Grupos
         </button>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1">
         <AnimatePresence mode="wait">
           {activeTab === 'team' ? (
             <motion.div 
@@ -122,7 +128,7 @@ export default function Society({
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              className="space-y-8"
+              className="space-y-8 pb-16"
             >
               <div className="flex flex-col gap-6">
                 <div className="flex items-center justify-between">

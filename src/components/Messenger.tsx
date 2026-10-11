@@ -74,6 +74,7 @@ interface MessengerProps {
   incomingCallSignal?: any;
   onClearIncomingCallSignal?: () => void;
   initialTab?: 'direct' | 'groups';
+  initialDirectUserId?: string;
   embedded?: boolean;
 }
 
@@ -86,6 +87,7 @@ export default function Messenger({
   incomingCallSignal,
   onClearIncomingCallSignal,
   initialTab = 'groups',
+  initialDirectUserId,
   embedded = false
 }: MessengerProps) {
   // Navigation tabs: 'direct' (private chats) or 'groups' (team groups)
@@ -100,6 +102,20 @@ export default function Messenger({
   // Direct chat states
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    if (initialDirectUserId) {
+      setActiveTab('direct');
+      const target = profiles.find(p => p.id === initialDirectUserId);
+      if (target) {
+        setSelectedUser(target);
+      } else {
+        supabase.from('profiles').select('*').eq('id', initialDirectUserId).single().then(({ data }) => {
+          if (data) setSelectedUser(data);
+        });
+      }
+    }
+  }, [initialDirectUserId, profiles]);
   const [selectedGroup, setSelectedGroup] = useState<ChatGroup | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -3931,7 +3947,7 @@ export default function Messenger({
             {isRecording ? (
               <div 
                 className="p-2.5 sm:p-3 bg-red-50 border-t border-red-200 flex items-center justify-between gap-2.5 relative z-20 animate-fadeIn w-full max-w-full overflow-hidden"
-                style={{ paddingBottom: `calc(${keyboardHeight > 0 ? `${keyboardHeight}px` : '0.75rem'} + env(safe-area-inset-bottom, 0px))` }}
+                style={{ paddingBottom: `calc(${keyboardHeight > 0 ? `${keyboardHeight}px` : (embedded ? '4.5rem' : '0.75rem')} + env(safe-area-inset-bottom, 0px))` }}
               >
                 <div className="flex items-center gap-2 text-red-600 font-bold text-xs min-w-0 flex-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping inline-block flex-shrink-0" />
@@ -3959,7 +3975,7 @@ export default function Messenger({
             ) : (
               <div 
                 className="p-2 sm:p-2.5 bg-[#f0f2f5] border-t border-slate-200 flex items-center gap-1.5 sm:gap-2 relative z-30 w-full max-w-full overflow-visible transition-all duration-150"
-                style={{ paddingBottom: `calc(${keyboardHeight > 0 ? `${keyboardHeight}px` : '0.5rem'} + env(safe-area-inset-bottom, 0px))` }}
+                style={{ paddingBottom: `calc(${keyboardHeight > 0 ? `${keyboardHeight}px` : (embedded ? '4.5rem' : '0.5rem')} + env(safe-area-inset-bottom, 0px))` }}
               >
                 {/* Botão de Anexos WhatsApp (+) */}
                 <div className="relative flex-shrink-0">
