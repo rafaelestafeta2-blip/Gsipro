@@ -15,7 +15,7 @@ import {
   Flame,
   Clock
 } from 'lucide-react';
-import { ReleaseInfo, downloadAndInstallApk, GITHUB_RELEASES_WEB_URL } from '../services/appUpdateService';
+import { ReleaseInfo, downloadAndInstallApk, openApkDownloadInBrowser, GITHUB_RELEASES_WEB_URL } from '../services/appUpdateService';
 
 interface AppUpdateModalProps {
   release: ReleaseInfo;
@@ -236,20 +236,28 @@ export default function AppUpdateModal({
             <motion.div 
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-5 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5"
+              className="mb-5 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex flex-col gap-3"
             >
-              <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-bold text-rose-200">Falha no download</p>
-                <p className="mt-0.5 text-rose-300/90 leading-relaxed">{errorMsg}</p>
-                <a
-                  href={release.html_url || GITHUB_RELEASES_WEB_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold underline text-[#d4af37] hover:text-[#f3e5ab]"
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-rose-200">Falha no download direto</p>
+                  <p className="mt-0.5 text-rose-300/90 leading-relaxed">{errorMsg}</p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-rose-500/20 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => openApkDownloadInBrowser(apkDownloadUrl)}
+                  className="w-full py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider bg-[#d4af37] hover:bg-[#b8962d] text-black shadow-lg shadow-[#d4af37]/20 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
                 >
-                  Baixar diretamente no GitHub <ExternalLink className="w-3 h-3" />
-                </a>
+                  <Download className="w-4 h-4" />
+                  <span>Baixar APK no Chrome do Celular</span>
+                </button>
+                <p className="text-[10px] text-center text-white/50">
+                  Após baixar no Chrome, abra o arquivo na barra de notificações ou em Downloads para instalar.
+                </p>
               </div>
             </motion.div>
           )}

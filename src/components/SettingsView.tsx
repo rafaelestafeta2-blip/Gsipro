@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { Profile } from '../types';
 import { motion } from 'motion/react';
-import { Bell, Save, ChevronLeft, Clock, Calendar, LogOut, User, HardHat, Briefcase, Euro, Phone, MapPin, Camera, Loader2, Smartphone, ShieldCheck, DownloadCloud, Sparkles } from 'lucide-react';
+import { Bell, Save, ChevronLeft, Clock, Calendar, LogOut, User, HardHat, Briefcase, Euro, Phone, MapPin, Camera, Loader2, Smartphone, ShieldCheck, DownloadCloud, Sparkles, Terminal } from 'lucide-react';
 import FCMPushModal from './FCMPushModal';
 import AppUpdateModal from './AppUpdateModal';
+import ErrorDiagnosticsModal from './ErrorDiagnosticsModal';
 import { checkForAppUpdate, getAppVersion, ReleaseInfo, GITHUB_OWNER, GITHUB_REPO } from '../services/appUpdateService';
 import { getCurrentLocation } from '../lib/locationService';
 import { captureNativePhoto } from '../lib/cameraService';
@@ -26,6 +27,7 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateRelease, setUpdateRelease] = useState<ReleaseInfo | null>(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState(false);
   const [currentAppVer, setCurrentAppVer] = useState('1.0.0');
   const [updateStatusText, setUpdateStatusText] = useState<string | null>(null);
 
@@ -452,6 +454,15 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
               {updateStatusText}
             </p>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsDiagnosticsModalOpen(true)}
+            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 font-bold text-[11px] rounded-xl transition-all flex items-center justify-center gap-2 active:scale-98"
+          >
+            <Terminal size={14} className="text-[#d4af37]" />
+            Ver Central de Diagnóstico & Erros do Sistema
+          </button>
         </div>
 
         <div className="space-y-6">
@@ -536,6 +547,11 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
           onClose={() => setIsUpdateModalOpen(false)}
         />
       )}
+
+      <ErrorDiagnosticsModal
+        isOpen={isDiagnosticsModalOpen}
+        onClose={() => setIsDiagnosticsModalOpen(false)}
+      />
     </div>
   );
 }

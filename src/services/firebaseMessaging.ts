@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, Token, PushNotificationSchema, ActionPerformed } from '@capacitor/push-notifications';
 import { supabase } from './supabaseClient';
+import { logDiagnosticError } from './errorLogService';
 
 export interface FCMStatus {
   isSupported: boolean;
@@ -197,6 +198,7 @@ export async function requestNativeNotificationPermission(userId?: string): Prom
 
     await PushNotifications.register().catch(regErr => {
       console.warn('[Native Push] Erro ao chamar PushNotifications.register():', regErr);
+      logDiagnosticError('notificacoes', 'Falha ao registrar no FCM Android', regErr);
     });
 
     const token = await registrationPromise;
@@ -206,6 +208,7 @@ export async function requestNativeNotificationPermission(userId?: string): Prom
     return token;
   } catch (err) {
     console.error('[Native Push] Erro seguro durante ativação de notificações nativas:', err);
+    logDiagnosticError('notificacoes', 'Erro na ativacao de notificacoes', err);
     return localStorage.getItem('gsi_fcm_token');
   }
 }

@@ -35,22 +35,20 @@ export interface ReleaseInfo {
 
 /**
  * Extrai e normaliza partes numéricas e de pré-release de qualquer tag do GitHub.
- * Exemplos: 'v1.0.7' -> [1, 0, 7], '1.0.7-beta' -> [1, 0, 7], 'v2.1' -> [2, 1, 0]
+ * Exemplos: 'v1.0.2' -> [1, 0, 2], 'v1.0.1' -> [1, 0, 1]
  */
 export function parseVersion(versionStr: string): number[] {
   if (!versionStr) return [0, 0, 0];
   
-  // Limpa prefixos 'v', espaços e partes adicionais como '-build' ou '-beta'
   const cleaned = versionStr
     .trim()
     .replace(/^v/i, '')
-    .split('-')[0] // remove sufixos pré-release para comparação numérica
+    .split('-')[0]
     .replace(/[^0-9.]/g, '');
   
   if (!cleaned) return [0, 0, 0];
   const parts = cleaned.split('.').map(num => parseInt(num, 10) || 0);
   
-  // Garante pelo menos 3 dígitos: [major, minor, patch]
   while (parts.length < 3) {
     parts.push(0);
   }
@@ -60,10 +58,6 @@ export function parseVersion(versionStr: string): number[] {
 
 /**
  * Compara a tag/versão da release do GitHub com a versão instalada no dispositivo.
- * Retorna true se a tag da release for estritamente mais alta que a instalada.
- * Ex: 'v1.0.7' > '1.0.0' => true
- *     'v1.0.0' > '1.0.0' => false
- *     'v1.1.0' > '1.0.9' => true
  */
 export function isNewerVersion(latestTagOrVersion: string, currentVersion: string): boolean {
   if (!latestTagOrVersion) return false;
@@ -83,8 +77,7 @@ export function isNewerVersion(latestTagOrVersion: string, currentVersion: strin
 }
 
 /**
- * Obtém a versão instalada no dispositivo utilizando o plugin App.getInfo() do Capacitor,
- * com fallback para APP_VERSION definido no código.
+ * Obtém a versão instalada no dispositivo utilizando App.getInfo() do Capacitor.
  */
 export async function getAppVersion(): Promise<string> {
   try {
@@ -107,7 +100,6 @@ export async function checkForAppUpdate(): Promise<ReleaseInfo | null> {
   try {
     const currentVersion = await getAppVersion();
     
-    // Fetch latest release with timeout and headers
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -132,7 +124,6 @@ export async function checkForAppUpdate(): Promise<ReleaseInfo | null> {
     const tagName = (releaseData.tag_name || releaseData.name || '').trim();
     const latestVersion = tagName.replace(/^v/i, '');
 
-    // Look for an .apk asset in the release
     let apkAsset: GitHubReleaseAsset | null = null;
     if (Array.isArray(releaseData.assets)) {
       apkAsset = releaseData.assets.find((asset: any) => 
@@ -140,10 +131,8 @@ export async function checkForAppUpdate(): Promise<ReleaseInfo | null> {
       ) || null;
     }
 
-    // Compara a tag oficial da release com a versão instalada
     const hasUpdate = isNewerVersion(tagName || latestVersion, currentVersion);
 
-    // Detecta se a release foi marcada como obrigatória no changelog
     const bodyLower = (releaseData.body || '').toLowerCase();
     const isMandatory = bodyLower.includes('[obrigatori') || 
                         bodyLower.includes('[mandatory]') || 
@@ -173,6 +162,36 @@ export async function checkForAppUpdate(): Promise<ReleaseInfo | null> {
 }
 
 /**
+ * Abre o download do APK diretamente no navegador do smartphone (Chrome/Android)
+ * Bypassa 100% qualquer bloqueio de CORS ou rede do WebView.
+ */
+export function openApkDownloadInBrowser(url: string): void {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      window.open(url, '_system');
+      return;
+    }
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.download = 'GSI_PRO_update.apk';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+    }, 200);
+  } catch {
+    try {
+      window.open(url, '_blank');
+    } catch {
+      window.location.href = url;
+    }
+  }
+}
+
+/**
  * Downloads the APK and invokes Android system installer
  */
 export async function downloadAndInstallApk(
@@ -181,94 +200,115 @@ export async function downloadAndInstallApk(
   onProgress?: (percent: number, loaded: number, total: number) => void
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. If running in browser (non-native Android), trigger normal browser download
-    if (!Capacitor.isNativePlatform()) {
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = fileName;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      return { success: true };
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    // 1. Se estiver rodando no Android Nativo (Capacitor)
+    if (Capacitor.isNativePlatform()) {
+      try {
+        console.log('[AppUpdate] Iniciando download nativo via Filesystem.downloadFile:', downloadUrl);
+        if (onProgress) onProgress(20, 0, 0);
+
+        const downloadResult = await Filesystem.downloadFile({
+          url: downloadUrl,
+          path: sanitizedFileName,
+          directory: Directory.Cache
+        });
+
+        if (downloadResult && downloadResult.path) {
+          if (onProgress) onProgress(100, 1, 1);
+          console.log('[AppUpdate] APK baixado com sucesso no Cache:', downloadResult.path);
+
+          // Abre com o Instalador de Pacotes do Android
+          await FileOpener.openFile({
+            path: downloadResult.path,
+            mimeType: 'application/vnd.android.package-archive',
+          });
+
+          return { success: true };
+        }
+      } catch (nativeDownloadErr: any) {
+        console.warn('[AppUpdate] Filesystem.downloadFile falhou ou sem permissão:', nativeDownloadErr);
+        // Fallback: Tenta download via fetch tradicional se a API suportar
+      }
     }
 
-    // 2. In Native Android: Download via fetch with progress tracking
-    const response = await fetch(downloadUrl);
-    if (!response.ok) {
-      throw new Error(`Falha no download da release (HTTP ${response.status})`);
-    }
+    // 2. Tentativa via Fetch tradicional com Stream
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
 
-    const contentLengthHeader = response.headers.get('content-length');
-    const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
-    
-    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-    if (response.body) {
-      reader = response.body.getReader();
-    }
+      const contentLengthHeader = response.headers.get('content-length');
+      const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+      
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      if (response.body) {
+        reader = response.body.getReader();
+      }
 
-    const chunks: Uint8Array[] = [];
-    let receivedBytes = 0;
+      const chunks: Uint8Array[] = [];
+      let receivedBytes = 0;
 
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          receivedBytes += value.length;
-          if (onProgress && totalBytes > 0) {
-            const percent = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
-            onProgress(percent, receivedBytes, totalBytes);
-          } else if (onProgress) {
-            onProgress(50, receivedBytes, 0);
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            receivedBytes += value.length;
+            if (onProgress && totalBytes > 0) {
+              const percent = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
+              onProgress(percent, receivedBytes, totalBytes);
+            }
           }
         }
+      } else {
+        const blob = await response.blob();
+        const arrayBuffer = await blob.arrayBuffer();
+        chunks.push(new Uint8Array(arrayBuffer));
+        receivedBytes = arrayBuffer.byteLength;
+        if (onProgress) onProgress(100, receivedBytes, receivedBytes);
       }
-    } else {
-      // Fallback if stream body is unavailable
-      const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
-      chunks.push(new Uint8Array(arrayBuffer));
-      receivedBytes = arrayBuffer.byteLength;
-      if (onProgress) onProgress(100, receivedBytes, receivedBytes);
+
+      const fullBuffer = new Uint8Array(receivedBytes);
+      let offset = 0;
+      for (const chunk of chunks) {
+        fullBuffer.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const base64Data = uint8ArrayToBase64(fullBuffer);
+
+      const writeResult = await Filesystem.writeFile({
+        path: sanitizedFileName,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+
+      await FileOpener.openFile({
+        path: writeResult.uri,
+        mimeType: 'application/vnd.android.package-archive',
+      });
+
+      return { success: true };
+    } catch (fetchErr: any) {
+      console.warn('[AppUpdate] Fetch direto bloqueado por CORS. Usando fallback do navegador:', fetchErr);
+      
+      // Fallback supremo: abre no navegador do smartphone
+      openApkDownloadInBrowser(downloadUrl);
+      return { 
+        success: false, 
+        error: 'O download foi aberto no navegador do seu celular. Toque em "Baixar" no Chrome para instalar o APK.' 
+      };
     }
-
-    // Combine chunks into single ArrayBuffer
-    const fullBuffer = new Uint8Array(receivedBytes);
-    let offset = 0;
-    for (const chunk of chunks) {
-      fullBuffer.set(chunk, offset);
-      offset += chunk.length;
-    }
-
-    // Convert to base64 for Capacitor Filesystem write
-    const base64Data = uint8ArrayToBase64(fullBuffer);
-
-    // Save to Cache directory so other apps (PackageInstaller) can access it via FileProvider
-    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const writeResult = await Filesystem.writeFile({
-      path: sanitizedFileName,
-      data: base64Data,
-      directory: Directory.Cache,
-      recursive: true,
-    });
-
-    const fileUri = writeResult.uri;
-
-    // 3. Open the downloaded APK file with Android Package Installer
-    await FileOpener.openFile({
-      path: fileUri,
-      mimeType: 'application/vnd.android.package-archive',
-    });
-
-    return { success: true };
   } catch (err: any) {
-    console.error('[AppUpdate] Erro ao descarregar ou instalar APK:', err);
+    console.error('[AppUpdate] Erro geral ao baixar APK:', err);
+    openApkDownloadInBrowser(downloadUrl);
     return {
       success: false,
-      error: err?.message || 'Falha ao descarregar ou abrir o ficheiro APK.',
+      error: 'Download iniciado no navegador do celular.',
     };
   }
 }
@@ -279,7 +319,7 @@ export async function downloadAndInstallApk(
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
   const len = bytes.byteLength;
-  const chunkSize = 0x8000; // 32KB chunks
+  const chunkSize = 0x8000;
   for (let i = 0; i < len; i += chunkSize) {
     const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
     binary += String.fromCharCode.apply(null, chunk as unknown as number[]);

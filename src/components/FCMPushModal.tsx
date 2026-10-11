@@ -10,7 +10,10 @@ import {
   Send, 
   RefreshCw, 
   Sparkles,
-  Info
+  Info,
+  Terminal,
+  Copy,
+  Check
 } from 'lucide-react';
 import { 
   requestNativeNotificationPermission, 
@@ -19,6 +22,8 @@ import {
 } from '../services/firebaseMessaging';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { logDiagnosticError, copySystemReportToClipboard } from '../services/errorLogService';
+import ErrorDiagnosticsModal from './ErrorDiagnosticsModal';
 
 interface FCMPushModalProps {
   isOpen: boolean;
@@ -35,7 +40,9 @@ export default function FCMPushModal({ isOpen, onClose, userId }: FCMPushModalPr
   const [exitHour, setExitHour] = useState(17);
   const [activeDays, setActiveDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'error' | 'info' | 'success'; text: string } | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'error' | 'info' | 'success'; text: string; details?: string } | null>(null);
+  const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState(false);
+  const [copiedError, setCopiedError] = useState(false);
   const isAndroidNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
@@ -89,9 +96,12 @@ export default function FCMPushModal({ isOpen, onClose, userId }: FCMPushModalPr
       }
     } catch (err: any) {
       console.error('Erro ao ativar notificações nativas:', err);
+      const errorStr = err?.message || (typeof err === 'string' ? err : JSON.stringify(err) || 'Erro no sistema Android');
+      logDiagnosticError('notificacoes', 'Falha ao ativar notificações no Android', err);
       setFeedbackMessage({
         type: 'error',
-        text: 'Não foi possível completar o registo das notificações neste momento.'
+        text: 'Erro ao ativar notificações: ' + errorStr,
+        details: err?.stack || errorStr
       });
     } finally {
       setIsActivating(false);
@@ -203,15 +213,43 @@ export default function FCMPushModal({ isOpen, onClose, userId }: FCMPushModalPr
           </div>
 
           {feedbackMessage && (
-            <div className={`p-3 rounded-xl text-xs font-bold border flex items-center gap-2 ${
+            <div className={`p-3.5 rounded-2xl text-xs font-bold border flex flex-col gap-2 ${
               feedbackMessage.type === 'error'
                 ? 'bg-red-500/10 border-red-500/30 text-red-300'
                 : feedbackMessage.type === 'success'
                 ? 'bg-green-500/10 border-green-500/30 text-green-300'
                 : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
             }`}>
-              <Info size={16} className="shrink-0" />
-              <span>{feedbackMessage.text}</span>
+              <div className="flex items-start gap-2">
+                <Info size={16} className="shrink-0 mt-0.5" />
+                <span className="leading-relaxed flex-1">{feedbackMessage.text}</span>
+              </div>
+
+              {feedbackMessage.type === 'error' && (
+                <div className="pt-2 border-t border-red-500/20 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await copySystemReportToClipboard();
+                      setCopiedError(true);
+                      setTimeout(() => setCopiedError(false), 2500);
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    {copiedError ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    <span>{copiedError ? 'Erro Copiado!' : 'Copiar Erro para Enviar'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDiagnosticsModalOpen(true)}
+                    className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Terminal size={13} />
+                    <span>Ver Detalhes</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -361,12 +399,27 @@ export default function FCMPushModal({ isOpen, onClose, userId }: FCMPushModalPr
           {/* Helpful Information Notice */}
           <div className="p-4 bg-white/[0.03] border border-white/5 rounded-2xl flex items-start gap-3">
             <Info size={16} className="text-[#d4af37] flex-shrink-0 mt-0.5" />
-            <p className="text-[10px] text-white/50 leading-relaxed">
-              <strong>Notificações Nativas do Sistema:</strong> O canal de alta prioridade do Android garante banner heads-up, som de alta intensidade e vibração mesmo com o dispositivo bloqueado ou em segundo plano.
-            </p>
+            <div className="flex-1">
+              <p className="text-[10px] text-white/50 leading-relaxed">
+                <strong>Notificações Nativas do Sistema:</strong> O canal de alta prioridade do Android garante banner heads-up, som de alta intensidade e vibração mesmo com o dispositivo bloqueado ou em segundo plano.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsDiagnosticsModalOpen(true)}
+                className="mt-2 text-[10px] text-[#d4af37] hover:underline font-bold flex items-center gap-1"
+              >
+                <Terminal size={12} />
+                <span>Central de Diagnóstico & Erros do Sistema</span>
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>
+
+      <ErrorDiagnosticsModal 
+        isOpen={isDiagnosticsModalOpen} 
+        onClose={() => setIsDiagnosticsModalOpen(false)} 
+      />
     </AnimatePresence>
   );
 }
