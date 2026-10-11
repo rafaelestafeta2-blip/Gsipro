@@ -12,6 +12,7 @@ import { shareContent } from '../lib/shareService';
 import { triggerSuccessHaptic, triggerLightHaptic } from '../lib/haptics';
 import { isOnline } from '../services/networkService';
 import { addToQueue } from '../services/offlineSyncService';
+import { useAppTheme } from '../lib/theme';
 
 export default function ProfileView({ 
   userId, 
@@ -22,6 +23,7 @@ export default function ProfileView({
   isDarkMode?: boolean,
   onProfileUpdate?: (profile: Partial<Profile>) => void 
 }) {
+  const { activeTheme } = useAppTheme();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -287,14 +289,17 @@ export default function ProfileView({
             </div>
 
             {/* Profile Info Card (Clean View) */}
-            <div className="bg-[#1c2431]/60 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center text-center space-y-6 shadow-2xl relative overflow-hidden">
+            <div className={`border rounded-[2.5rem] p-8 sm:p-10 flex flex-col items-center text-center space-y-6 shadow-2xl relative overflow-hidden transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}>
               <div className="relative">
-                <div className="w-32 h-32 rounded-full border-4 border-[#d4af37] p-1 shadow-2xl">
+                <div 
+                  className="w-32 h-32 rounded-full border-4 p-1 shadow-2xl"
+                  style={{ borderColor: activeTheme.accentColor }}
+                >
                   <div className="w-full h-full rounded-full overflow-hidden border border-white/10">
                     {profile?.avatar_url ? (
                       <img src={profile.avatar_url} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full bg-[#0a0e17] flex items-center justify-center text-white/20 text-4xl font-black">
+                      <div className="w-full h-full bg-black/40 flex items-center justify-center text-white/20 text-4xl font-black">
                         {profile?.full_name?.charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -305,42 +310,45 @@ export default function ProfileView({
               <div className="space-y-2">
                 <h3 className="text-3xl font-black text-white tracking-tighter uppercase">{profile?.full_name}</h3>
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span className="bg-[#d4af37] text-black text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                  <span 
+                    className="text-black text-[9px] font-black px-3.5 py-1 rounded-full uppercase tracking-widest shadow-md"
+                    style={{ backgroundColor: activeTheme.accentColor }}
+                  >
                     {profile?.role}
                   </span>
                   {profile?.location_city && (
-                    <span className="bg-white/5 border border-white/10 text-white/40 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1">
-                      <HomeIcon size={10} className="text-[#d4af37]" /> {profile.location_city}
+                    <span className="bg-white/5 border border-white/10 text-white/60 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1">
+                      <HomeIcon size={10} style={{ color: activeTheme.accentColor }} /> {profile.location_city}
                     </span>
                   )}
                 </div>
               </div>
 
               <div className="w-full grid grid-cols-2 gap-4 pt-4">
-                <div className="bg-[#0a0e17] p-4 rounded-2xl border border-white/5 space-y-1">
-                  <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.2em]">Horas no Mês</p>
-                  <p className="text-xl font-black text-[#d4af37] flex items-center justify-center gap-2">
+                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
+                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Horas no Mês</p>
+                  <p className="text-xl font-black flex items-center justify-center gap-2" style={{ color: activeTheme.accentColor }}>
                     <Clock size={16} /> {totalHours.toFixed(1)}h
                   </p>
                 </div>
-                <div className="bg-[#0a0e17] p-4 rounded-2xl border border-white/5 space-y-1">
-                  <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.2em]">Previsto Receber</p>
+                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
+                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Previsto Receber</p>
                   <p className="text-xl font-black text-white flex items-center justify-center gap-2">
-                    <Euro size={16} className="text-[#d4af37]" /> 
+                    <Euro size={16} style={{ color: activeTheme.accentColor }} /> 
                     {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(totalPayment)}
                   </p>
                 </div>
 
-                <div className="bg-[#0a0e17] p-4 rounded-2xl border border-white/5 space-y-1">
-                  <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.2em]">Obra Atual</p>
-                  <p className="text-xs font-black text-white/60 truncate flex items-center justify-center gap-2">
-                    <Briefcase size={12} /> {profile?.current_obra || 'Sem obra'}
+                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
+                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Obra Atual</p>
+                  <p className="text-xs font-black text-white/70 truncate flex items-center justify-center gap-2">
+                    <Briefcase size={12} style={{ color: activeTheme.accentColor }} /> {profile?.current_obra || 'Sem obra'}
                   </p>
                 </div>
-                <div className="bg-[#0a0e17] p-4 rounded-2xl border border-white/5 space-y-1">
-                  <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.2em]">Contacto</p>
-                  <p className="text-xs font-black text-white/60 flex items-center justify-center gap-2">
-                    <Phone size={12} className="text-[#d4af37]" /> {profile?.phone || 'Privado'}
+                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
+                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Contacto</p>
+                  <p className="text-xs font-black text-white/70 flex items-center justify-center gap-2">
+                    <Phone size={12} style={{ color: activeTheme.accentColor }} /> {profile?.phone || 'Privado'}
                   </p>
                 </div>
               </div>
@@ -352,14 +360,15 @@ export default function ProfileView({
               <div className="space-y-3 px-1">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-xs font-black uppercase tracking-[0.25em] text-white/50 flex items-center gap-2">
-                    <CalendarIcon size={14} className="text-[#d4af37]" /> Histórico Mensal
+                    <CalendarIcon size={14} style={{ color: activeTheme.accentColor }} /> Histórico Mensal
                   </h4>
                   
                   {/* Botão de Ação JPG Superior */}
                   <button 
                     onClick={generateJPG}
                     disabled={exporting}
-                    className="flex items-center gap-2 px-3.5 py-2 bg-[#d4af37] hover:bg-[#e5c04b] text-black rounded-xl text-[10px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#d4af37]/25 disabled:opacity-50 flex-shrink-0"
+                    className="flex items-center gap-2 px-3.5 py-2 text-black rounded-xl text-[10px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50 flex-shrink-0"
+                    style={{ backgroundColor: activeTheme.accentColor }}
                     title="Baixar folha de ponto do mês em formato JPG"
                   >
                     <Download size={14} className="stroke-[2.5]" />

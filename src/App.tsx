@@ -964,21 +964,32 @@ export default function App() {
               className="space-y-8"
             >
               {/* User Profile Card */}
-              <div className="bg-[#1c2431]/60 border border-white/5 rounded-[2.5rem] p-8 flex flex-col items-center text-center space-y-4 shadow-2xl relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#d4af37]/40 to-transparent" />
+              <div 
+                className={`border rounded-[2.5rem] p-8 flex flex-col items-center text-center space-y-4 shadow-2xl relative overflow-hidden group transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}
+              >
+                <div 
+                  className="absolute top-0 left-0 w-full h-1" 
+                  style={{ background: `linear-gradient(to right, transparent, ${activeTheme.accentColor}, transparent)` }}
+                />
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-full border-[3px] border-[#d4af37] p-1 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
+                  <div 
+                    className="w-24 h-24 rounded-full border-[3px] p-1 shadow-2xl"
+                    style={{ borderColor: activeTheme.accentColor }}
+                  >
                     <div className="w-full h-full rounded-full overflow-hidden border border-white/10">
                       {profile?.avatar_url ? (
                         <img src={profile.avatar_url} className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full bg-[#0a0e17] flex items-center justify-center text-white/20 text-3xl font-black">
+                        <div className="w-full h-full bg-black/40 flex items-center justify-center text-white/20 text-3xl font-black">
                           {userName ? userName.charAt(0).toUpperCase() : '?'}
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#d4af37] border-4 border-[#1c2431] rounded-full flex items-center justify-center">
+                  <div 
+                    className="absolute -bottom-1 -right-1 w-6 h-6 border-4 border-[#1c2431] rounded-full flex items-center justify-center shadow-md"
+                    style={{ backgroundColor: activeTheme.accentColor }}
+                  >
                     <TrendingUp size={10} className="text-black" />
                   </div>
                 </div>
@@ -986,10 +997,22 @@ export default function App() {
                 <div className="space-y-1">
                   <div className="flex items-center justify-center gap-2">
                     <h2 className="text-2xl font-black text-white tracking-tighter uppercase">{userName || 'Usuário'}</h2>
-                    <span className="bg-[#d4af37] text-black text-[8px] font-black px-1.5 py-0.5 rounded uppercase">NV {stats.level}</span>
+                    <span 
+                      className="text-black text-[8px] font-black px-1.5 py-0.5 rounded uppercase shadow-sm"
+                      style={{ backgroundColor: activeTheme.accentColor }}
+                    >
+                      NV {stats.level}
+                    </span>
                   </div>
-                  <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 rounded-full px-4 py-1 inline-block">
-                    <p className="text-[#d4af37] text-[10px] font-black uppercase tracking-widest">{stats.rankName}</p>
+                  <div 
+                    className="rounded-full px-4 py-1 inline-block border"
+                    style={{ 
+                      backgroundColor: `${activeTheme.accentColor}18`, 
+                      borderColor: `${activeTheme.accentColor}35`,
+                      color: activeTheme.accentColor
+                    }}
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-widest">{stats.rankName}</p>
                   </div>
                 </div>
 
@@ -998,27 +1021,38 @@ export default function App() {
                   <div className="space-y-2">
                     <div className="flex justify-between items-end px-1">
                       <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">XP Progress</p>
-                      <p className="text-[9px] font-black text-[#d4af37]">{stats.xp} / {(stats.level + 1) * 1000} XP</p>
+                      <p className="text-[9px] font-black" style={{ color: activeTheme.accentColor }}>
+                        {stats.xp} / {(stats.level + 1) * 1000} XP
+                      </p>
                     </div>
                     <div className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
                       <motion.div 
                         initial={{ width: 0 }}
                         animate={{ width: `${stats.progress}%` }}
-                        className="h-full bg-gradient-to-r from-[#d4af37] to-amber-200"
+                        className="h-full rounded-full"
+                        style={{ background: `linear-gradient(to right, ${activeTheme.accentColor}, ${activeTheme.secondaryColor})` }}
                       />
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-t border-white/5 pt-6">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full border-[3px] border-[#d4af37] border-r-transparent animate-[spin_4s_linear_infinite] flex items-center justify-center">
-                        <div className="w-8 h-8 rounded-full bg-[#1c2431] flex items-center justify-center text-[8px] font-black text-[#d4af37]">{Math.floor(stats.progress)}%</div>
+                      <div 
+                        className="w-12 h-12 rounded-full border-[3px] border-r-transparent animate-[spin_4s_linear_infinite] flex items-center justify-center"
+                        style={{ borderColor: activeTheme.accentColor, borderRightColor: 'transparent' }}
+                      >
+                        <div 
+                          className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[8px] font-black"
+                          style={{ color: activeTheme.accentColor }}
+                        >
+                          {Math.floor(stats.progress)}%
+                        </div>
                       </div>
                       <div className="text-left">
                         <p className="text-xs font-black text-white">Carreira Profissional</p>
                         <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest">Patente: {stats.rankName} | Total XP: {stats.xp}</p>
                       </div>
                     </div>
-                    <TrendingUp size={24} className="text-[#d4af37] opacity-40" />
+                    <TrendingUp size={24} style={{ color: activeTheme.accentColor }} className="opacity-60" />
                   </div>
                 </div>
               </div>
@@ -1125,7 +1159,7 @@ export default function App() {
       {/* Mobile Navigation */}
       {!isImmersive && (
         <nav 
-          className="fixed bottom-0 left-0 right-0 border-t border-white/5 flex items-center justify-around px-4 z-[60] bg-[#0a0e17]/95 backdrop-blur-xl transition-all"
+          className={`fixed bottom-0 left-0 right-0 border-t border-white/10 flex items-center justify-around px-4 z-[60] transition-all ${activeTheme.navBg}`}
           style={{
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             height: 'calc(4.75rem + env(safe-area-inset-bottom, 0px))'
@@ -1136,9 +1170,10 @@ export default function App() {
               triggerLightHaptic();
               setActiveTab('home');
             }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'home' ? 'text-[#d4af37] scale-110' : 'text-white/30'}`}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'home' ? 'scale-110 font-black' : 'text-white/30'}`}
+            style={activeTab === 'home' ? { color: activeTheme.accentColor } : {}}
           >
-            <Home size={22} className={activeTab === 'home' ? 'fill-[#d4af37]/20' : ''} />
+            <Home size={22} style={activeTab === 'home' ? { color: activeTheme.accentColor } : {}} />
             <span className="text-[7px] font-black uppercase tracking-widest">Home</span>
           </button>
           <button 
@@ -1146,9 +1181,10 @@ export default function App() {
               triggerLightHaptic();
               setActiveTab('reels');
             }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'reels' ? 'text-[#d4af37] scale-110' : 'text-white/30'}`}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'reels' ? 'scale-110 font-black' : 'text-white/30'}`}
+            style={activeTab === 'reels' ? { color: activeTheme.accentColor } : {}}
           >
-            <Film size={22} className={activeTab === 'reels' ? 'fill-[#d4af37]/20' : ''} />
+            <Film size={22} style={activeTab === 'reels' ? { color: activeTheme.accentColor } : {}} />
             <span className="text-[7px] font-black uppercase tracking-widest">Reels</span>
           </button>
           <button 
@@ -1156,9 +1192,22 @@ export default function App() {
               triggerLightHaptic();
               setActiveTab('ponto');
             }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'ponto' ? 'text-[#d4af37] scale-110' : 'text-white/30'}`}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'ponto' ? 'scale-110 font-black' : 'text-white/30'}`}
+            style={activeTab === 'ponto' ? { color: activeTheme.accentColor } : {}}
           >
-            <div className={`p-3 rounded-full border-2 ${activeTab === 'ponto' ? 'border-[#d4af37] bg-[#d4af37]/10' : 'border-white/10 bg-white/5'} -mt-8 transition-all shadow-[0_0_20px_rgba(212,175,55,0.2)]`}>
+            <div 
+              className={`p-3 rounded-full border-2 -mt-8 transition-all shadow-xl`}
+              style={activeTab === 'ponto' ? {
+                borderColor: activeTheme.accentColor,
+                backgroundColor: `${activeTheme.accentColor}20`,
+                boxShadow: `0 0 20px ${activeTheme.accentColor}40`,
+                color: activeTheme.accentColor
+              } : {
+                borderColor: 'rgba(255,255,255,0.1)',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                color: '#ffffff'
+              }}
+            >
               <Clock size={24} />
             </div>
             <span className="text-[7px] font-black uppercase tracking-widest mt-1">Ponto</span>
@@ -1168,9 +1217,10 @@ export default function App() {
               triggerLightHaptic();
               setActiveTab('society');
             }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'society' ? 'text-[#d4af37] scale-110' : 'text-white/30'}`}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'society' ? 'scale-110 font-black' : 'text-white/30'}`}
+            style={activeTab === 'society' ? { color: activeTheme.accentColor } : {}}
           >
-            <Users size={22} />
+            <Users size={22} style={activeTab === 'society' ? { color: activeTheme.accentColor } : {}} />
             <span className="text-[7px] font-black uppercase tracking-widest">Equipa</span>
           </button>
           <button 
@@ -1178,9 +1228,10 @@ export default function App() {
               triggerLightHaptic();
               setActiveTab('profile');
             }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'profile' ? 'text-[#d4af37] scale-110' : 'text-white/30'}`}
+            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'profile' ? 'scale-110 font-black' : 'text-white/30'}`}
+            style={activeTab === 'profile' ? { color: activeTheme.accentColor } : {}}
           >
-            <User size={22} />
+            <User size={22} style={activeTab === 'profile' ? { color: activeTheme.accentColor } : {}} />
             <span className="text-[7px] font-black uppercase tracking-widest">Perfil</span>
           </button>
         </nav>

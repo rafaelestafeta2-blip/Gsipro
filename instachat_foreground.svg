@@ -1,0 +1,44 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bubbleGradFg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00c2ff" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+
+    <linearGradient id="lensGradFg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="50%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+
+    <filter id="glowFg" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#00c2ff" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Scaled slightly for Android Adaptive Foreground inset bounds -->
+  <g transform="translate(38, 38) scale(0.85)">
+    <!-- Outer Chat Bubble -->
+    <path filter="url(#glowFg)" d="M 112 80 H 400 C 452 80 460 122 460 175 V 315 C 460 368 418 410 365 410 H 215 L 125 475 V 410 C 75 410 52 368 52 315 V 175 C 52 122 60 80 112 80 Z" fill="url(#bubbleGradFg)" />
+
+    <!-- Sparkle Lines Top Left -->
+    <path d="M 92 55 L 112 75 M 72 95 L 92 115" stroke="#ffffff" stroke-width="16" stroke-linecap="round" />
+
+    <!-- White Camera Body Inside -->
+    <rect x="142" y="165" width="228" height="175" rx="52" fill="#ffffff" />
+
+    <!-- Camera Top Bump -->
+    <path d="M 205 165 L 225 135 H 287 L 307 165 Z" fill="#ffffff" />
+
+    <!-- Lens Outer Ring -->
+    <circle cx="256" cy="252" r="62" fill="url(#lensGradFg)" />
+
+    <!-- Lens Inner Reflection -->
+    <circle cx="256" cy="252" r="36" fill="#1e1b4b" />
+    <circle cx="240" cy="236" r="15" fill="#ffffff" opacity="0.9" />
+
+    <!-- Small Flash Dot -->
+    <circle cx="328" cy="195" r="13" fill="#00c2ff" />
+  </g>
+</svg>

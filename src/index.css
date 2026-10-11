@@ -12,12 +12,35 @@
 }
 
 body {
-  background-color: #0a0e17;
-  color: white;
+  background-color: var(--theme-bg, #080d1a);
+  color: var(--theme-text, #ffffff);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light Theme Overrides */
+html.theme-light body {
+  background-color: #f8f5f0;
+  color: #0f172a;
+}
+
+html.theme-light .text-white {
+  color: #0f172a !important;
+}
+
+html.theme-light .bg-\[\#0a0e17\],
+html.theme-light .bg-\[\#080d1a\],
+html.theme-light .bg-\[\#1c2431\]\/60,
+html.theme-light .bg-\[\#1c2431\] {
+  background-color: #ffffff !important;
+}
+
+html.theme-light .border-white\/5,
+html.theme-light .border-white\/10 {
+  border-color: rgba(249, 115, 22, 0.2) !important;
 }
 
 /* Safe area padding utilities */

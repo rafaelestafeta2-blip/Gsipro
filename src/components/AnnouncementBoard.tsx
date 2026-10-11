@@ -29,6 +29,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { triggerBackgroundNotification, requestNativeNotificationPermission, checkNativeNotificationPermission } from '../services/firebaseMessaging';
 import { Capacitor } from '@capacitor/core';
+import { useAppTheme } from '../lib/theme';
 
 interface AnnouncementBoardProps {
   isAdmin: boolean;
@@ -117,6 +118,7 @@ const DEFAULT_SLIDE: ParsedAnnouncement = {
 };
 
 export default function AnnouncementBoard({ isAdmin, userId, userName }: AnnouncementBoardProps) {
+  const { activeTheme } = useAppTheme();
   const [announcements, setAnnouncements] = useState<ParsedAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -411,7 +413,8 @@ export default function AnnouncementBoard({ isAdmin, userId, userName }: Announc
         {isAdmin && (
           <button 
             onClick={() => setShowEditor(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#d4af37] hover:bg-[#e5c04b] text-black rounded-xl text-[10px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-md shadow-[#d4af37]/20"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-black rounded-xl text-[10px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-md flex-shrink-0"
+            style={{ backgroundColor: activeTheme.accentColor }}
           >
             <Plus size={14} className="stroke-[3]" />
             <span>Novo Aviso</span>
@@ -425,14 +428,17 @@ export default function AnnouncementBoard({ isAdmin, userId, userName }: Announc
         onMouseLeave={() => setIsPaused(false)}
         onTouchStart={() => setIsPaused(true)}
         onTouchEnd={() => setIsPaused(false)}
-        className="relative bg-gradient-to-br from-[#1c2431]/95 via-[#141b26]/90 to-[#0e1420]/95 border border-white/10 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-xl group select-none min-h-[220px]"
+        className={`relative border rounded-3xl overflow-hidden shadow-2xl backdrop-blur-xl group select-none min-h-[220px] transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}
       >
         {/* Glowing Top Progress Bar */}
         {slides.length > 1 && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-white/5 z-30">
             <motion.div 
-              className="h-full bg-gradient-to-r from-[#d4af37] to-[#ffd700] shadow-[0_0_10px_#d4af37]"
-              style={{ width: `${progress}%` }}
+              className="h-full rounded-full shadow-lg"
+              style={{ 
+                width: `${progress}%`,
+                background: `linear-gradient(to right, ${activeTheme.accentColor}, ${activeTheme.secondaryColor})`
+              }}
               transition={{ ease: 'linear' }}
             />
           </div>
@@ -460,7 +466,14 @@ export default function AnnouncementBoard({ isAdmin, userId, userName }: Announc
               {/* Top Row: Badge, Date & Admin Action */}
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border bg-[#d4af37]/15 text-[#d4af37] border-[#d4af37]/30 shadow-sm">
+                  <span 
+                    className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-sm"
+                    style={{ 
+                      backgroundColor: `${activeTheme.accentColor}20`,
+                      borderColor: `${activeTheme.accentColor}40`,
+                      color: activeTheme.accentColor
+                    }}
+                  >
                     {currentSlide.badge}
                   </span>
                   <span className="text-[9px] font-bold text-white/40 uppercase tracking-widest">
@@ -585,12 +598,12 @@ export default function AnnouncementBoard({ isAdmin, userId, userName }: Announc
               {/* Bottom Footer: Author signature */}
               <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[10px] text-white/40">
                 <span className="font-bold flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37]" />
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: activeTheme.accentColor }} />
                   Publicado por <strong className="text-white/70">{currentSlide.author_name}</strong>
                 </span>
 
-                <span className="text-[9px] uppercase tracking-widest font-black text-[#d4af37]/80">
-                  GSI PRO Obras
+                <span className="text-[9px] uppercase tracking-widest font-black" style={{ color: activeTheme.accentColor }}>
+                  INSTA CHAT Obras
                 </span>
               </div>
             </motion.div>
@@ -602,14 +615,14 @@ export default function AnnouncementBoard({ isAdmin, userId, userName }: Announc
           <>
             <button 
               onClick={() => paginate(-1)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-[#d4af37] text-white/70 hover:text-black border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-20 shadow-lg active:scale-95"
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white/70 border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-20 shadow-lg active:scale-95"
               title="Aviso anterior"
             >
               <ChevronLeft size={16} />
             </button>
             <button 
               onClick={() => paginate(1)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-[#d4af37] text-white/70 hover:text-black border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-20 shadow-lg active:scale-95"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white/70 border border-white/10 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-20 shadow-lg active:scale-95"
               title="Próximo aviso"
             >
               <ChevronRight size={16} />
@@ -626,9 +639,10 @@ export default function AnnouncementBoard({ isAdmin, userId, userName }: Announc
                 onClick={() => goToSlide(idx)}
                 className={`transition-all rounded-full ${
                   currentIndex === idx 
-                    ? 'w-5 h-1.5 bg-[#d4af37] shadow-[0_0_8px_#d4af37]' 
+                    ? 'w-5 h-1.5 shadow-md' 
                     : 'w-1.5 h-1.5 bg-white/20 hover:bg-white/40'
                 }`}
+                style={currentIndex === idx ? { backgroundColor: activeTheme.accentColor } : {}}
                 title={`Ir para aviso ${idx + 1}`}
               />
             ))}
