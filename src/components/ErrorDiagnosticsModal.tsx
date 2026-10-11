@@ -139,9 +139,9 @@ export default function ErrorDiagnosticsModal({ isOpen, onClose }: ErrorDiagnost
                   </p>
                 </div>
               ) : (
-                logs.map((log) => (
+                logs.map((log, lIdx) => (
                   <div
-                    key={log.id}
+                    key={log.id ? `diag-log-${log.id}-${lIdx}` : `diag-log-idx-${lIdx}`}
                     className="p-3.5 rounded-2xl bg-black/50 border border-rose-500/20 text-xs text-rose-300 font-mono space-y-1.5"
                   >
                     <div className="flex items-center justify-between text-[10px] text-white/50">

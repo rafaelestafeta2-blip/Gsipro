@@ -442,7 +442,7 @@ export default function AnnouncementBoard({ isAdmin, userId, userName }: Announc
         <div className="relative overflow-hidden min-h-[220px]">
           <AnimatePresence initial={false} custom={direction} mode="wait">
             <motion.div
-              key={currentSlide.id || currentIndex}
+              key={currentSlide.id ? `ann-slide-${currentSlide.id}-${currentIndex}` : `ann-slide-idx-${currentIndex}`}
               custom={direction}
               variants={slideVariants}
               initial="enter"

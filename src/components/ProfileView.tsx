@@ -535,9 +535,9 @@ export default function ProfileView({
               </AnimatePresence>
 
               <div className="space-y-3">
-                {entries.map((entry) => (
+                {entries.map((entry, entryIdx) => (
                   <motion.div
-                    key={entry.id}
+                    key={entry.id ? `profile-entry-${entry.id}-${entryIdx}` : `profile-entry-idx-${entryIdx}`}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     className={`group border rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer ${entry.is_absence ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-[#1c2431]/40 border-white/5 hover:bg-[#1c2431]/60'}`}

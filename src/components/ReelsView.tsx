@@ -360,7 +360,7 @@ export default function ReelsView({
         </div>
       ) : (
         <div className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none">
-          {reelPosts.map((post) => {
+          {reelPosts.map((post, postIdx) => {
             const isActive = activeReelId === post.id;
             const hasLiked = (post.likes || []).includes(currentUserId);
             const likesCount = (post.likes || []).length;
@@ -369,7 +369,7 @@ export default function ReelsView({
 
             return (
               <div
-                key={post.id}
+                key={post.id ? `reel-${post.id}-${postIdx}` : `reel-idx-${postIdx}`}
                 data-reel-id={post.id}
                 ref={el => { reelRefs.current[post.id] = el; }}
                 className="w-full h-[calc(100vh-80px)] snap-start relative flex items-center justify-center bg-black overflow-hidden"
@@ -525,8 +525,8 @@ export default function ReelsView({
                 if (comments.length === 0) {
                   return <p className="text-xs text-white/40 text-center py-8 italic">Nenhum comentário ainda. Seja o primeiro a comentar!</p>;
                 }
-                return comments.map((comm) => (
-                  <div key={comm.id} className="bg-white/5 border border-white/5 rounded-2xl p-3 flex items-start gap-3">
+                return comments.map((comm, commIdx) => (
+                  <div key={comm.id ? `reel-comm-${comm.id}-${commIdx}` : `reel-comm-idx-${commIdx}`} className="bg-white/5 border border-white/5 rounded-2xl p-3 flex items-start gap-3">
                     <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
                       {comm.author_avatar ? (
                         <img src={comm.author_avatar} className="w-full h-full object-cover" />

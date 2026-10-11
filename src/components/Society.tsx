@@ -147,9 +147,9 @@ export default function Society({
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {filteredProfiles.map((profile) => (
+                  {filteredProfiles.map((profile, pIdx) => (
                     <motion.div
-                      key={profile.id}
+                      key={profile.id ? `soc-prof-${profile.id}-${pIdx}` : `soc-prof-idx-${pIdx}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       onClick={() => fetchWorkerDetails(profile)}
@@ -337,9 +337,9 @@ export default function Society({
                     <Calendar size={13} className="text-[#d4af37]" /> Atividade Mensal Recente
                   </h4>
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-1.5 custom-scrollbar">
-                    {workerEntries.map((entry) => (
+                    {workerEntries.map((entry, eIdx) => (
                       <div 
-                        key={entry.id} 
+                        key={entry.id ? `soc-entry-${entry.id}-${eIdx}` : `soc-entry-idx-${eIdx}`} 
                         className={`p-4 border rounded-xl flex justify-between items-center transition-all ${
                           isDarkMode 
                             ? 'bg-white/[0.01] border-white/5 hover:bg-white/[0.03]' 

@@ -696,7 +696,7 @@ export default function SocialFeed({
         </div>
       ) : (
         <div className="space-y-8">
-          {posts.map((post) => {
+          {posts.map((post, postIdx) => {
             const hasLiked = (post.likes || []).includes(currentUserId);
             const isOwner = post.user_id === currentUserId || isAdmin;
             const commentsCount = (post.comments || []).length;
@@ -706,7 +706,7 @@ export default function SocialFeed({
 
             return (
               <motion.div
-                key={post.id}
+                key={post.id ? `feed-post-${post.id}-${postIdx}` : `feed-post-idx-${postIdx}`}
                 data-post-id={post.id}
                 ref={el => { postRefs.current[post.id] = el; }}
                 initial={{ opacity: 0, y: 15 }}
@@ -874,9 +874,9 @@ export default function SocialFeed({
                       {/* Comments List */}
                       {post.comments && post.comments.length > 0 ? (
                         <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-1">
-                          {post.comments.map((comment) => (
+                          {post.comments.map((comment, commIdx) => (
                             <div 
-                              key={comment.id}
+                              key={comment.id ? `feed-comment-${comment.id}-${commIdx}` : `feed-comment-idx-${commIdx}`}
                               className="bg-[#0a0e17]/60 border border-white/5 rounded-2xl p-2.5 flex items-start gap-2.5"
                             >
                               <div className="w-7 h-7 rounded-full border border-white/10 overflow-hidden flex-shrink-0 bg-white/5">

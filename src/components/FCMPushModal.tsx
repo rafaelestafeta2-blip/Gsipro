@@ -366,7 +366,7 @@ export default function FCMPushModal({ isOpen, onClose, userId }: FCMPushModalPr
                   return (
                     <button
                       type="button"
-                      key={d.id}
+                      key={`fcm-day-${d.id}`}
                       onClick={() => toggleDay(d.id)}
                       className={`py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${
                         isActive

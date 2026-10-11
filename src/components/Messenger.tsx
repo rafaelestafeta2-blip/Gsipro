@@ -3271,7 +3271,7 @@ export default function Messenger({
                   <p className="text-[8px] font-black uppercase tracking-widest text-white/30 px-1 mb-1">
                     Membros da Equipe
                   </p>
-                  {groupMembers.map((m) => {
+                  {groupMembers.map((m, index) => {
                     const prof = m.profile;
                     const isAdm = m.user_id === selectedGroup.created_by || m.role === 'admin';
                     const isMe = m.user_id === currentUserId;
@@ -3279,7 +3279,7 @@ export default function Messenger({
 
                     return (
                       <div 
-                        key={m.id || m.user_id}
+                        key={m.id ? `gm-${m.id}-${index}` : `gm-u-${m.user_id || 'noid'}-${index}`}
                         className="flex items-center justify-between p-2.5 rounded-2xl bg-black/25 border border-white/5 hover:border-white/10 transition-all"
                       >
                         <div className="flex items-center gap-3 min-w-0">
@@ -3387,7 +3387,7 @@ export default function Messenger({
 
                 if (msg.sender_name === 'Sistema') {
                   return (
-                    <div key={msg.id || i} className="w-full flex justify-center py-1">
+                    <div key={msg.id ? `grp-msg-sys-${msg.id}-${i}` : `grp-msg-sys-idx-${i}`} className="w-full flex justify-center py-1">
                       <span className="bg-white/95 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-bold text-slate-600 uppercase tracking-widest border border-slate-200 shadow-sm">
                         {msg.content}
                       </span>
@@ -3396,7 +3396,7 @@ export default function Messenger({
                 }
 
                 return (
-                  <div key={msg.id || i} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 px-1`}>
+                  <div key={msg.id ? `grp-msg-${msg.id}-${i}` : `grp-msg-idx-${i}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 px-1`}>
                     <div className={`flex items-end gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                       {/* Avatar beside message balloon */}
                       <div className="w-7 h-7 rounded-full overflow-hidden shadow-sm flex-shrink-0 mb-1 border border-white bg-slate-300">
@@ -4166,7 +4166,7 @@ export default function Messenger({
                 const senderAvatar = isMe ? userAvatar : selectedUser.avatar_url;
 
                 return (
-                  <div key={msg.id || i} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 px-1`}>
+                  <div key={msg.id ? `dm-msg-${msg.id}-${i}` : `dm-msg-idx-${i}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-4 px-1`}>
                     <div className={`flex items-end gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                       {/* Avatar beside message balloon */}
                       <div className="w-7 h-7 rounded-full overflow-hidden shadow-sm flex-shrink-0 mb-1 border border-white bg-slate-300">
@@ -4986,11 +4986,11 @@ export default function Messenger({
                     <p className="text-[10px] font-black uppercase tracking-widest">Nenhum grupo encontrado</p>
                   </div>
                 ) : (
-                  filteredGroups.map(group => {
+                  filteredGroups.map((group, gIdx) => {
                     const isMember = userMemberships.has(group.id);
                     return (
                       <button 
-                        key={group.id}
+                        key={group.id ? `grp-list-${group.id}-${gIdx}` : `grp-list-idx-${gIdx}`}
                         onClick={() => setSelectedGroup(group)}
                         className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.02] hover:bg-white/5 border border-white/5 transition-all text-left group"
                       >
@@ -5047,11 +5047,11 @@ export default function Messenger({
                     <p className="text-[10px] font-black uppercase tracking-widest">Nenhum colega encontrado</p>
                   </div>
                 ) : (
-                  filteredProfiles.map(p => {
+                  filteredProfiles.map((p, pIdx) => {
                     const isBlocked = blocks.some(b => b.blocked_id === p.id);
                     return (
                       <button 
-                        key={p.id}
+                        key={p.id ? `prof-list-${p.id}-${pIdx}` : `prof-list-idx-${pIdx}`}
                         onClick={() => setSelectedUser(p)}
                         className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.02] hover:bg-white/5 border border-white/5 transition-all text-left group"
                       >
