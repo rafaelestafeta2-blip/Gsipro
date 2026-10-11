@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { Profile, TimeEntry } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, LogOut, Save, Phone, Euro, HardHat, Settings, Briefcase, Camera, Upload, Loader2, Calendar as CalendarIcon, MapPin, ChevronRight, Home as HomeIcon, Download, ChevronLeft, X, Clock, Trash2 } from 'lucide-react';
+import { User, LogOut, Save, Phone, Euro, HardHat, Settings, Briefcase, Camera, Upload, Loader2, Calendar as CalendarIcon, MapPin, ChevronRight, Home as HomeIcon, Download, ChevronLeft, X, Clock, Trash2, Palette } from 'lucide-react';
 import SettingsView from './SettingsView';
 import ReportTemplate from './ReportTemplate';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns';
@@ -270,12 +270,20 @@ export default function ProfileView({
             {/* Header Dashboard */}
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-black uppercase tracking-tighter text-white">Seu Perfil</h2>
-              <button 
-                onClick={() => setShowSettings(true)}
-                className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-white/5 text-[#d4af37] hover:bg-[#d4af37] hover:text-black"
-              >
-                <Settings size={14} /> Configurações
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowSettings(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-cyan-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-cyan-500/10 text-[#00c2ff] hover:bg-[#00c2ff] hover:text-black"
+                >
+                  <Palette size={14} /> Temas
+                </button>
+                <button 
+                  onClick={() => setShowSettings(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-white/5 text-[#d4af37] hover:bg-[#d4af37] hover:text-black"
+                >
+                  <Settings size={14} /> Ajustes
+                </button>
+              </div>
             </div>
 
             {/* Profile Info Card (Clean View) */}

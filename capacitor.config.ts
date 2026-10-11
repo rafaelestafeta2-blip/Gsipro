@@ -9,7 +9,7 @@ export const APP_VERSION = '1.0.4';
 
 const config: CapacitorConfig = {
   appId: 'com.gsipro.app',
-  appName: 'GSI PRO',
+  appName: 'INSTA CHAT',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

@@ -10,4 +10,4 @@
 export const APP_VERSION = '1.0.4';
 export const APP_BUILD_NUMBER = 4;
 export const APP_ID = 'com.gsipro.app';
-export const APP_NAME = 'GSI PRO';
+export const APP_NAME = 'INSTA CHAT';

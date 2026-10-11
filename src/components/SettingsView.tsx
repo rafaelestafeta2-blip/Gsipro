@@ -6,6 +6,7 @@ import { Bell, Save, ChevronLeft, Clock, Calendar, LogOut, User, HardHat, Briefc
 import FCMPushModal from './FCMPushModal';
 import AppUpdateModal from './AppUpdateModal';
 import ErrorDiagnosticsModal from './ErrorDiagnosticsModal';
+import ThemeSelector from './ThemeSelector';
 import { checkForAppUpdate, getAppVersion, ReleaseInfo, GITHUB_OWNER, GITHUB_REPO } from '../services/appUpdateService';
 import { getCurrentLocation } from '../lib/locationService';
 import { captureNativePhoto } from '../lib/cameraService';
@@ -327,6 +328,11 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Theme & Color Models Selection */}
+        <div className="border-b border-white/5 pb-8">
+          <ThemeSelector />
         </div>
 
         {/* Firebase Cloud Messaging Push Section */}

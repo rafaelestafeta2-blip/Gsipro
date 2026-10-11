@@ -29,7 +29,7 @@ export async function configureAndroidNotificationChannel(): Promise<void> {
   try {
     await PushNotifications.createChannel({
       id: HIGH_PRIORITY_CHANNEL_ID,
-      name: 'Chamadas e Mensagens GSI PRO',
+      name: 'Chamadas e Mensagens INSTA CHAT',
       description: 'Notificações urgentes de chamadas e mensagens em tempo real',
       importance: 5, // High importance (heads-up notification & sound)
       visibility: 1, // Public on lockscreen

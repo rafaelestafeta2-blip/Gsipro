@@ -61,13 +61,16 @@ export default function Auth() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-[#1c2431]/60 backdrop-blur-xl border border-white/5 p-10 rounded-[2.5rem] shadow-2xl shadow-black/50 flex flex-col items-center relative z-10"
       >
-        <div className="mb-8">
-          <AnimatedLogo size={80} />
+        <div className="mb-4">
+          <AnimatedLogo size={90} showText={false} />
         </div>
 
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-black text-white mb-2 tracking-tighter">GSI<span className="text-[#d4af37] ml-1">PRO</span></h1>
-          <p className="text-white/40 text-xs font-black uppercase tracking-[0.3em]">Capital Humano Premium</p>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-black text-white mb-1.5 tracking-tighter">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00c2ff] to-[#3b82f6]">INSTA</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3b82f6] via-[#a855f7] to-[#ec4899] ml-1.5">CHAT</span>
+          </h1>
+          <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em]">Social Hub & Messenger Premium</p>
         </div>
 
         {success ? (

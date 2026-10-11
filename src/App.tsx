@@ -15,6 +15,8 @@ import ReelsView from './components/ReelsView';
 import Messenger from './components/Messenger';
 import FCMPushModal from './components/FCMPushModal';
 import AppUpdateModal from './components/AppUpdateModal';
+import InstaChatLogo from './components/InstaChatLogo';
+import { useAppTheme } from './lib/theme';
 import Onboarding, { ONBOARDING_STORAGE_KEY } from './components/Onboarding';
 import IncomingCallScreen from './components/IncomingCallScreen';
 import { checkForAppUpdate, ReleaseInfo } from './services/appUpdateService';
@@ -72,6 +74,7 @@ import { initOfflineSync, addToQueue, processQueue, getPendingItems } from './se
 export default function App() {
   const { showSuccess, showError, showWarning, showInfo } = useToast();
   const { isOnline: isDeviceOnline } = useNetworkStatus();
+  const { activeTheme } = useAppTheme();
   const [session, setSession] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'home' | 'ponto' | 'society' | 'alerts' | 'profile'>('home');
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -869,21 +872,24 @@ export default function App() {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-[#0a0e17] flex flex-col items-center justify-center p-4 relative overflow-hidden text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.08)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,194,255,0.12)_0%,transparent_70%)] pointer-events-none" />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
           className="flex flex-col items-center space-y-6 relative z-10"
         >
-          <AnimatedLogo size={90} />
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-black tracking-tighter text-white">GSI<span className="text-[#d4af37] ml-1">PRO</span></h1>
-            <p className="text-[10px] font-black text-[#d4af37] uppercase tracking-[0.4em]">A carregar sistema...</p>
+          <AnimatedLogo size={110} showText={false} />
+          <div className="text-center space-y-1.5 mt-2">
+            <h1 className="text-3xl font-black tracking-tighter uppercase">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00c2ff] to-[#3b82f6]">INSTA</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3b82f6] via-[#a855f7] to-[#ec4899] ml-1.5">CHAT</span>
+            </h1>
+            <p className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.4em]">A carregar aplicação...</p>
           </div>
-          <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mt-4">
+          <div className="w-52 h-1.5 bg-white/10 rounded-full overflow-hidden mt-4 p-0.5 border border-white/10 shadow-lg shadow-cyan-500/20">
             <motion.div 
-              className="h-full bg-[#d4af37]"
+              className="h-full bg-gradient-to-r from-[#00c2ff] via-[#3b82f6] to-[#a855f7] rounded-full"
               initial={{ x: '-100%' }}
               animate={{ x: '100%' }}
               transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
@@ -915,36 +921,32 @@ export default function App() {
       {/* Header */}
       {!isImmersive && (
         <header 
-          className="flex justify-between items-start px-6 pb-4 sticky top-0 z-[60] bg-[#0a0e17]/90 backdrop-blur-md transition-all"
+          className={`flex justify-between items-center px-6 pb-3 sticky top-0 z-[60] transition-all border-b ${activeTheme.headerBg}`}
           style={{
             paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.85rem)'
           }}
         >
-          <div className="space-y-0.5">
-            <h1 className="text-2xl font-black tracking-tighter text-white">
-              {activeTab === 'ponto' ? 'Marcar Ponto' : 'Ponto Social'}
-              {activeTab === 'ponto' && <span className="bg-[#d4af37] text-black text-[8px] font-black px-1.5 py-0.5 rounded uppercase ml-2 align-middle">NEW</span>}
-            </h1>
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-              {format(today, "EEEE, dd 'de' MMMM", { locale: ptBR })} - {format(today, "HH:mm")}
-            </p>
-          </div>
+          <InstaChatLogo size="md" />
+
           <div className="flex items-center gap-3">
+            <p className="hidden sm:block text-[10px] font-bold opacity-50 uppercase tracking-widest">
+              {format(today, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+            </p>
             <button 
               onClick={() => {
                 setIsMessengerOpen(true);
                 setUnreadMsgCount(0);
               }}
-              className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center bg-white/5 hover:bg-white/10 transition-all relative"
-              title="Chat & Mensagens"
+              className="w-10 h-10 rounded-full border border-cyan-500/20 flex items-center justify-center bg-cyan-500/10 hover:bg-cyan-500/20 transition-all relative shadow-lg shadow-cyan-500/10"
+              title="Chat & Mensagens INSTA CHAT"
             >
-              <Zap size={18} className="text-[#d4af37] fill-[#d4af37]/20" />
+              <Zap size={18} className="text-[#00c2ff] fill-[#00c2ff]/20" />
               {unreadMsgCount > 0 ? (
                 <div className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 bg-red-500 text-white font-black text-[10px] rounded-full flex items-center justify-center animate-bounce shadow-lg shadow-red-500/40 border border-[#0a0e17]">
                   {unreadMsgCount}
                 </div>
               ) : (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#0084ff] border-2 border-[#0a0e17] rounded-full animate-pulse" />
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#00c2ff] border-2 border-[#0a0e17] rounded-full animate-pulse" />
               )}
             </button>
           </div>

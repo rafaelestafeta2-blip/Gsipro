@@ -67,7 +67,7 @@ export const IncomingCallScreen: React.FC<IncomingCallScreenProps> = ({
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-lg">
           <ShieldCheck size={14} className="text-[#d4af37]" />
           <span className="text-[11px] font-bold tracking-wider text-slate-300 uppercase">
-            GSI PRO • Chamada Segura
+            INSTA CHAT • Chamada Segura
           </span>
         </div>
 

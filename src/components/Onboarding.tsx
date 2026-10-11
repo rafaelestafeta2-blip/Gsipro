@@ -105,9 +105,9 @@ export default function Onboarding({ onComplete, onRequestNotifications }: Onboa
       {/* Top Header: Brand & Skip Button */}
       <div className="relative z-10 flex items-center justify-between w-full h-10">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[#d4af37] animate-pulse" />
-          <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#d4af37]">
-            GSI PRO <span className="text-white/40 font-normal">| TUTORIAL</span>
+          <div className="w-2 h-2 rounded-full bg-[#00c2ff] animate-pulse" />
+          <span className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400">
+            INSTA CHAT <span className="text-white/40 font-normal">| TUTORIAL</span>
           </span>
         </div>
 
@@ -140,14 +140,14 @@ export default function Onboarding({ onComplete, onRequestNotifications }: Onboa
               </div>
 
               <div className="space-y-3">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37] text-[10px] font-black uppercase tracking-widest">
-                  <Sparkles size={12} /> Plataforma Oficial de Obra
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-black uppercase tracking-widest">
+                  <Sparkles size={12} /> Rede Social & Mensagens
                 </span>
                 <h1 className="text-3xl font-black text-white tracking-tight">
-                  Bem-vindo ao <span className="text-[#d4af37]">GSI PRO</span>
+                  Bem-vindo ao <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00c2ff] via-[#3b82f6] to-[#a855f7]">INSTA CHAT</span>
                 </h1>
                 <p className="text-sm text-white/70 max-w-xs leading-relaxed font-medium">
-                  O teu sistema de ponto, equipa e comunicação num só sítio.
+                  A tua plataforma de mensagens, grupos, equipa e comunidade num só sítio.
                 </p>
               </div>
 
@@ -394,7 +394,7 @@ export default function Onboarding({ onComplete, onRequestNotifications }: Onboa
                   Tudo <span className="text-[#d4af37]">pronto!</span>
                 </h2>
                 <p className="text-sm text-white/70 max-w-xs leading-relaxed font-medium">
-                  Já podes começar a usar o GSI PRO. Bom trabalho na obra!
+                  Já podes começar a usar o INSTA CHAT!
                 </p>
               </div>
 
