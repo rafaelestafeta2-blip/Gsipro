@@ -7,6 +7,7 @@ import FCMPushModal from './FCMPushModal';
 import AppUpdateModal from './AppUpdateModal';
 import ErrorDiagnosticsModal from './ErrorDiagnosticsModal';
 import ThemeSelector from './ThemeSelector';
+import { useAppTheme } from '../lib/theme';
 import { checkForAppUpdate, getAppVersion, ReleaseInfo, GITHUB_OWNER, GITHUB_REPO } from '../services/appUpdateService';
 import { getCurrentLocation } from '../lib/locationService';
 import { captureNativePhoto } from '../lib/cameraService';
@@ -21,6 +22,7 @@ interface SettingsViewProps {
 }
 
 export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = true }: SettingsViewProps) {
+  const { activeTheme } = useAppTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -246,7 +248,10 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
         <div className="space-y-8 border-b border-white/5 pb-8">
           <div className="flex flex-col items-center gap-6">
             <div className="relative group">
-              <div className="w-24 h-24 rounded-full border-2 border-[#d4af37]/30 overflow-hidden shadow-xl bg-[#0a0e17] group-hover:border-[#d4af37] transition-all relative">
+              <div 
+                className="w-24 h-24 rounded-full border-2 overflow-hidden shadow-xl bg-[#0a0e17] transition-all relative"
+                style={{ borderColor: activeTheme.accentColor }}
+              >
                 {avatarUrl ? (
                   <img src={avatarUrl} className="w-full h-full object-cover" />
                 ) : (
@@ -254,14 +259,15 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
                 )}
                 {uploading && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <Loader2 className="text-[#d4af37] animate-spin" size={24} />
+                    <Loader2 className="animate-spin" style={{ color: activeTheme.accentColor }} size={24} />
                   </div>
                 )}
               </div>
               <button 
                 type="button"
                 onClick={handleAvatarButtonClick} 
-                className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#d4af37] rounded-xl flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all shadow-lg text-black"
+                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all shadow-lg text-black"
+                style={{ backgroundColor: activeTheme.accentColor }}
                 title="Mudar foto de perfil"
               >
                 <Camera size={14} className="text-black" />
@@ -273,16 +279,16 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase tracking-widest text-white/40 block ml-1">Nome Completo</label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" size={14} />
-                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-[#d4af37]/50" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: activeTheme.accentColor }} size={14} />
+                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none focus:ring-1" style={{ accentColor: activeTheme.accentColor }} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase tracking-widest text-white/40 block ml-1">Cargo</label>
                 <div className="relative">
-                  <HardHat className="absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" size={14} />
-                  <select value={role} onChange={(e) => setRole(e.target.value as any)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-[#d4af37]/50 appearance-none">
+                  <HardHat className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: activeTheme.accentColor }} size={14} />
+                  <select value={role} onChange={(e) => setRole(e.target.value as any)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none appearance-none">
                     <option value="Ajudante">Ajudante</option>
                     <option value="Oficial">Oficial</option>
                     <option value="Motorista">Motorista</option>
@@ -295,24 +301,24 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase tracking-widest text-white/40 block ml-1">Obra Atual</label>
                 <div className="relative">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" size={14} />
-                  <input type="text" value={currentObra} onChange={(e) => setCurrentObra(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-[#d4af37]/50" />
+                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: activeTheme.accentColor }} size={14} />
+                  <input type="text" value={currentObra} onChange={(e) => setCurrentObra(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none" />
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase tracking-widest text-white/40 block ml-1">Taxa (€/h)</label>
                 <div className="relative">
-                  <Euro className="absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" size={14} />
-                  <input type="number" step="0.01" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-[#d4af37]/50" />
+                  <Euro className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: activeTheme.accentColor }} size={14} />
+                  <input type="number" step="0.01" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none" />
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase tracking-widest text-white/40 block ml-1">Telefone</label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" size={14} />
-                  <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-[#d4af37]/50" />
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: activeTheme.accentColor }} size={14} />
+                  <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none" />
                 </div>
               </div>
 
@@ -320,10 +326,10 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
                 <label className="text-[10px] font-black uppercase tracking-widest text-white/40 block ml-1">Cidade</label>
                 <div className="relative flex gap-2">
                   <div className="relative flex-1">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" size={14} />
-                    <input type="text" value={locationCity} onChange={(e) => setLocationCity(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-[#d4af37]/50" />
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: activeTheme.accentColor }} size={14} />
+                    <input type="text" value={locationCity} onChange={(e) => setLocationCity(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none" />
                   </div>
-                  <button type="button" onClick={updateLocation} className="p-3 bg-[#0a0e17] rounded-xl border border-white/5 text-[#d4af37] hover:border-[#d4af37]/30 transition-all"><MapPin size={14} /></button>
+                  <button type="button" onClick={updateLocation} className="p-3 bg-[#0a0e17] rounded-xl border border-white/5 hover:border-white/20 transition-all" style={{ color: activeTheme.accentColor }}><MapPin size={14} /></button>
                 </div>
               </div>
             </div>
@@ -336,21 +342,27 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
         </div>
 
         {/* Firebase Cloud Messaging Push Section */}
-        <div className="p-6 bg-gradient-to-br from-[#1c2431] to-[#0f172a] border border-[#d4af37]/30 rounded-3xl space-y-4 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full blur-2xl pointer-events-none" />
+        <div 
+          className="p-6 border rounded-3xl space-y-4 shadow-xl relative overflow-hidden transition-all"
+          style={{ backgroundColor: activeTheme.styles.card, borderColor: activeTheme.styles.border }}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-2xl pointer-events-none" style={{ backgroundColor: `${activeTheme.accentColor}10` }} />
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-[#d4af37]/15 rounded-2xl text-[#d4af37] border border-[#d4af37]/30 shadow-md">
+              <div 
+                className="p-3 rounded-2xl border shadow-md"
+                style={{ backgroundColor: `${activeTheme.accentColor}20`, color: activeTheme.accentColor, borderColor: `${activeTheme.accentColor}40` }}
+              >
                 <Smartphone size={24} />
               </div>
               <div>
-                <h3 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2" style={{ color: activeTheme.styles.text }}>
                   Notificações Nativas Android (FCM)
-                  <span className="text-[7px] bg-[#d4af37] text-black px-1.5 py-0.5 rounded font-mono uppercase font-black">
+                  <span className="text-[7px] text-black px-1.5 py-0.5 rounded font-mono uppercase font-black" style={{ backgroundColor: activeTheme.accentColor }}>
                     App Fechado
                   </span>
                 </h3>
-                <p className="text-[10px] text-white/50 mt-0.5 leading-relaxed">
+                <p className="text-[10px] opacity-60 mt-0.5 leading-relaxed">
                   Receba alertas na tela do celular mesmo se o app estiver totalmente fechado em segundo plano.
                 </p>
               </div>
@@ -360,7 +372,7 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
           <button
             type="button"
             onClick={() => setIsFCMModalOpen(true)}
-            className="w-full py-4 bg-[#d4af37] text-black font-black uppercase text-xs tracking-widest rounded-2xl shadow-lg shadow-[#d4af37]/20 hover:scale-[1.01] active:scale-98 transition-all flex items-center justify-center gap-2"
+            className={`w-full py-4 font-black uppercase text-xs tracking-widest rounded-2xl shadow-lg hover:scale-[1.01] active:scale-98 transition-all flex items-center justify-center gap-2 ${activeTheme.primaryBtnClass}`}
           >
             <Bell size={16} />
             Configurar e Testar Alertas Push
@@ -368,16 +380,16 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
         </div>
 
         {/* Permissões do Sistema */}
-        <div className="bg-[#1c2431]/60 border border-white/5 rounded-3xl p-6 space-y-4">
+        <div className="border rounded-3xl p-6 space-y-4" style={{ backgroundColor: `${activeTheme.styles.card}80`, borderColor: activeTheme.styles.border }}>
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#d4af37]/10 rounded-xl text-[#d4af37]"><ShieldCheck size={20} /></div>
+            <div className="p-2 rounded-xl" style={{ backgroundColor: `${activeTheme.accentColor}20`, color: activeTheme.accentColor }}><ShieldCheck size={20} /></div>
             <div>
-              <h3 className="text-xs font-black uppercase tracking-widest text-white">Permissões de Sistema</h3>
-              <p className="text-[10px] text-white/40 font-medium">Câmera, Microfone e Localização GPS</p>
+              <h3 className="text-xs font-black uppercase tracking-widest text-current">Permissões de Sistema</h3>
+              <p className="text-[10px] opacity-40 font-medium">Câmera, Microfone e Localização GPS</p>
             </div>
           </div>
           
-          <p className="text-xs text-white/60 leading-relaxed">
+          <p className="text-xs opacity-60 leading-relaxed">
             O Android solicita permissões automaticamente na primeira vez que envia fotos ou áudios. Toque abaixo para pré-autorizar o hardware:
           </p>
 
@@ -389,10 +401,11 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
                 stream.getTracks().forEach(t => t.stop());
                 alert('✅ Permissões de Câmera e Microfone concedidas com sucesso!');
               } catch (e) {
-                alert('ℹ️ Se não abriu o diálogo, verifique se a Câmera e Microfone estão autorizados em Configurações > Aplicativos > GSI PRO.');
+                alert('ℹ️ Se não abriu o diálogo, verifique se a Câmera e Microfone estão autorizados em Configurações > Aplicativos.');
               }
             }}
-            className="w-full py-3.5 bg-white/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/30 hover:border-[#d4af37] text-[#d4af37] font-black uppercase text-[11px] tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-98"
+            className="w-full py-3.5 bg-white/5 border border-white/10 font-black uppercase text-[11px] tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-98"
+            style={{ color: activeTheme.accentColor }}
           >
             <Camera size={15} />
             Pré-Autorizar Câmera e Microfone
@@ -404,9 +417,9 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
               triggerLightHaptic();
               window.dispatchEvent(new CustomEvent('gsi:open_onboarding'));
             }}
-            className="w-full py-3.5 bg-white/5 hover:bg-[#d4af37]/15 border border-white/10 hover:border-[#d4af37]/40 text-white/80 hover:text-[#d4af37] font-bold text-[11px] rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-98"
+            className="w-full py-3.5 bg-white/5 border border-white/10 font-bold text-[11px] rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-98 hover:bg-white/10"
           >
-            <Sparkles size={14} className="text-[#d4af37]" />
+            <Sparkles size={14} style={{ color: activeTheme.accentColor }} />
             Ver Tutorial Inicial do App (Onboarding)
           </button>
         </div>
@@ -466,15 +479,15 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
             onClick={() => setIsDiagnosticsModalOpen(true)}
             className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 font-bold text-[11px] rounded-xl transition-all flex items-center justify-center gap-2 active:scale-98"
           >
-            <Terminal size={14} className="text-[#d4af37]" />
+            <Terminal size={14} style={{ color: activeTheme.accentColor }} />
             Ver Central de Diagnóstico & Erros do Sistema
           </button>
         </div>
 
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#d4af37]/10 rounded-lg text-[#d4af37]"><Clock size={20} /></div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-white">Horário do Lembrete</h3>
+            <div className="p-2 rounded-lg" style={{ backgroundColor: `${activeTheme.accentColor}20`, color: activeTheme.accentColor }}><Clock size={20} /></div>
+            <h3 className="text-xs font-black uppercase tracking-widest text-current">Horário do Lembrete</h3>
           </div>
           
           <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
@@ -482,13 +495,15 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
               <button
                 key={hour}
                 onClick={() => setNotificationHour(hour)}
-                className={`
-                  py-3 rounded-xl font-black text-xs transition-all border
-                  ${notificationHour === hour 
-                    ? 'bg-[#d4af37] border-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20' 
-                    : 'bg-[#0a0e17] border-white/5 text-white/40 hover:border-white/20'
-                  }
-                `}
+                className={`py-3 rounded-xl font-black text-xs transition-all border ${
+                  notificationHour === hour 
+                    ? 'shadow-lg text-black font-black' 
+                    : 'bg-black/20 border-white/5 opacity-40 hover:opacity-100'
+                }`}
+                style={notificationHour === hour ? {
+                  backgroundColor: activeTheme.accentColor,
+                  borderColor: activeTheme.accentColor
+                } : undefined}
               >
                 {hour.toString().padStart(2, '0')}:00
               </button>
@@ -498,8 +513,8 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
 
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#d4af37]/10 rounded-lg text-[#d4af37]"><Calendar size={20} /></div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-white">Dias da Semana</h3>
+            <div className="p-2 rounded-lg" style={{ backgroundColor: `${activeTheme.accentColor}20`, color: activeTheme.accentColor }}><Calendar size={20} /></div>
+            <h3 className="text-xs font-black uppercase tracking-widest text-current">Dias da Semana</h3>
           </div>
           
           <div className="flex flex-wrap gap-3">
@@ -509,13 +524,15 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
                 <button
                   key={day.id}
                   onClick={() => toggleDay(day.id)}
-                  className={`
-                    px-6 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all border
-                    ${isSelected 
-                      ? 'bg-[#d4af37] border-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20' 
-                      : 'bg-[#0a0e17] border-white/5 text-white/40 hover:border-white/20'
-                    }
-                  `}
+                  className={`px-6 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all border ${
+                    isSelected 
+                      ? 'text-black shadow-lg font-black' 
+                      : 'bg-black/20 border-white/5 opacity-40 hover:opacity-100'
+                  }`}
+                  style={isSelected ? {
+                    backgroundColor: activeTheme.accentColor,
+                    borderColor: activeTheme.accentColor
+                  } : undefined}
                 >
                   {day.label}
                 </button>
@@ -527,7 +544,7 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
         <button 
           onClick={saveSettings}
           disabled={saving}
-          className="w-full mt-4 bg-[#d4af37] hover:bg-[#b8962d] text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-[#d4af37]/20 text-xs"
+          className={`w-full mt-4 py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg text-xs ${activeTheme.primaryBtnClass}`}
         >
           <Save size={18} />
           {saving ? 'Salvando...' : 'Salvar Preferências'}

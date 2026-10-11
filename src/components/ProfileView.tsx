@@ -254,7 +254,7 @@ export default function ProfileView({
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <Loader2 className="animate-spin text-[#d4af37]" size={32} />
+      <Loader2 className="animate-spin" style={{ color: activeTheme.accentColor }} size={32} />
     </div>
   );
 
@@ -281,7 +281,8 @@ export default function ProfileView({
                 </button>
                 <button 
                   onClick={() => setShowSettings(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-white/5 text-[#d4af37] hover:bg-[#d4af37] hover:text-black"
+                  className="flex items-center gap-1.5 px-3 py-2 border rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-white/5 hover:bg-white/20"
+                  style={{ borderColor: activeTheme.styles.border, color: activeTheme.accentColor }}
                 >
                   <Settings size={14} /> Ajustes
                 </button>
@@ -377,20 +378,22 @@ export default function ProfileView({
                 </div>
                 
                 {/* Navegador de Mês */}
-                <div className="flex items-center justify-between bg-[#1c2431] rounded-2xl border border-white/5 p-1.5 shadow-inner">
+                <div className="flex items-center justify-between rounded-2xl border p-1.5 shadow-inner" style={{ backgroundColor: activeTheme.styles.card, borderColor: activeTheme.styles.border }}>
                   <button 
                     onClick={() => setViewDate(subMonths(viewDate, 1))} 
-                    className="p-2.5 hover:text-[#d4af37] hover:bg-white/5 rounded-xl transition-all text-white/50"
+                    className="p-2.5 hover:bg-white/10 rounded-xl transition-all"
+                    style={{ color: activeTheme.accentColor }}
                     title="Mês anterior"
                   >
                     <ChevronLeft size={18} />
                   </button>
-                  <span className="text-xs font-black text-white uppercase tracking-wider text-center">
+                  <span className="text-xs font-black uppercase tracking-wider text-center" style={{ color: activeTheme.styles.text }}>
                     {format(viewDate, 'MMMM yyyy', { locale: ptBR })}
                   </span>
                   <button 
                     onClick={() => setViewDate(addMonths(viewDate, 1))} 
-                    className="p-2.5 hover:text-[#d4af37] hover:bg-white/5 rounded-xl transition-all text-white/50"
+                    className="p-2.5 hover:bg-white/10 rounded-xl transition-all"
+                    style={{ color: activeTheme.accentColor }}
                     title="Próximo mês"
                   >
                     <ChevronRight size={18} />
@@ -399,10 +402,10 @@ export default function ProfileView({
               </div>
 
               {/* Grid Calendar Mini */}
-              <div className="bg-[#1c2431]/40 border border-white/5 rounded-3xl p-6">
+              <div className="border rounded-3xl p-6" style={{ backgroundColor: `${activeTheme.styles.card}80`, borderColor: activeTheme.styles.border }}>
                 <div className="grid grid-cols-7 gap-2 mb-4">
                   {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-                    <span key={d} className="text-[8px] font-black text-white/20 uppercase text-center">{d}</span>
+                    <span key={d} className="text-[8px] font-black uppercase text-center opacity-40">{d}</span>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-2">
@@ -416,19 +419,30 @@ export default function ProfileView({
                       <button 
                         key={day.toISOString()}
                         onClick={() => handleDayClick(day.getDate(), entry)}
-                        className={`aspect-square rounded-lg flex flex-col items-center justify-center relative border transition-all active:scale-95 ${entry ? (entry.is_absence ? 'bg-red-500/20 border-red-500/50' : 'bg-[#d4af37]/20 border-[#d4af37]/50') : 'bg-[#0a0e17] border-white/5 hover:border-white/20'}`}
+                        className={`aspect-square rounded-lg flex flex-col items-center justify-center relative border transition-all active:scale-95 ${
+                          entry 
+                            ? (entry.is_absence ? 'bg-red-500/20 border-red-500/50' : '') 
+                            : 'bg-black/20 border-white/5 hover:border-white/20'
+                        }`}
+                        style={entry && !entry.is_absence ? {
+                          backgroundColor: `${activeTheme.accentColor}25`,
+                          borderColor: `${activeTheme.accentColor}70`
+                        } : undefined}
                       >
-                        <span className={`text-[10px] font-black ${entry ? 'text-white' : 'text-white/20'}`}>{day.getDate()}</span>
+                        <span className={`text-[10px] font-black ${entry ? 'text-current' : 'opacity-30'}`}>{day.getDate()}</span>
                         {entry && (
-                          <span className={`text-[6px] font-black mt-0.5 ${entry.is_absence ? 'text-red-500' : 'text-[#d4af37]'}`}>
+                          <span 
+                            className={`text-[6px] font-black mt-0.5 ${entry.is_absence ? 'text-red-500' : ''}`}
+                            style={!entry.is_absence ? { color: activeTheme.accentColor } : undefined}
+                          >
                             {entry.is_absence ? 'FALTA' : `${entry.hours}h`}
                           </span>
                         )}
                         {isSameDay(day, new Date()) && (
-                          <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#1c2431] shadow-lg" />
+                          <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full border-2 border-black shadow-lg" style={{ backgroundColor: activeTheme.accentColor }} />
                         )}
                         {entry?.sync_status === 'pending_sync' && (
-                          <div className="absolute -top-1 -left-1 w-2 h-2 bg-amber-400 rounded-full border border-[#1c2431] shadow-lg animate-pulse" title="Pendente de sincronização" />
+                          <div className="absolute -top-1 -left-1 w-2 h-2 bg-amber-400 rounded-full border border-black shadow-lg animate-pulse" title="Pendente de sincronização" />
                         )}
                       </button>
                     );
@@ -439,7 +453,7 @@ export default function ProfileView({
                 <button 
                   onClick={generateJPG}
                   disabled={exporting}
-                  className="w-full mt-6 py-3 px-4 bg-gradient-to-r from-[#d4af37] to-[#f3cf65] hover:from-[#e5c04b] hover:to-[#ffd700] text-black font-black rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all shadow-xl shadow-[#d4af37]/20 active:scale-98 disabled:opacity-50"
+                  className={`w-full mt-6 py-3.5 px-4 font-black rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all shadow-xl active:scale-98 disabled:opacity-50 ${activeTheme.primaryBtnClass}`}
                 >
                   <Download size={16} className="stroke-[2.5]" />
                   <span>{exporting ? 'A Gerar Folha...' : 'Baixar Folha de Ponto Mensal (JPG)'}</span>

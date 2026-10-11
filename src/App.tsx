@@ -904,7 +904,7 @@ export default function App() {
 
   return (
     <div 
-      className="min-h-screen bg-[#0a0e17] text-white font-sans selection:bg-[#d4af37]/30 transition-all duration-500 overflow-x-hidden"
+      className={`min-h-screen text-white font-sans transition-all duration-500 overflow-x-hidden ${activeTheme.bgClass}`}
       style={{
         paddingBottom: 'calc(5.75rem + env(safe-area-inset-bottom, 0px))'
       }}
@@ -1316,12 +1316,12 @@ export default function App() {
               setIncomingMessageToast(null);
               setUnreadMsgCount(0);
             }}
-            className="fixed left-1/2 -translate-x-1/2 z-[150] w-[92%] max-w-md bg-[#1c2431]/95 border border-[#d4af37]/40 shadow-2xl shadow-black/80 rounded-2xl p-3.5 flex items-center gap-3 backdrop-blur-xl cursor-pointer hover:border-[#d4af37] transition-all"
+            className={`fixed left-1/2 -translate-x-1/2 z-[150] w-[92%] max-w-md border shadow-2xl rounded-2xl p-3.5 flex items-center gap-3 backdrop-blur-xl cursor-pointer transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}
             style={{
               top: 'calc(env(safe-area-inset-top, 0px) + 0.85rem)'
             }}
           >
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-[#d4af37] bg-black/50 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-full overflow-hidden border bg-black/50 flex items-center justify-center flex-shrink-0" style={{ borderColor: activeTheme.accentColor }}>
               {incomingMessageToast.senderAvatar ? (
                 <img src={incomingMessageToast.senderAvatar} className="w-full h-full object-cover" />
               ) : (
@@ -1334,7 +1334,7 @@ export default function App() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-white truncate">{incomingMessageToast.senderName}</span>
-                <span className="text-[9px] font-bold text-[#d4af37] uppercase">Agora</span>
+                <span className="text-[9px] font-bold uppercase" style={{ color: activeTheme.accentColor }}>Agora</span>
               </div>
               <p className="text-xs text-white/80 truncate mt-0.5">{incomingMessageToast.content}</p>
             </div>
