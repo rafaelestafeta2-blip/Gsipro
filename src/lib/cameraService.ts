@@ -27,7 +27,9 @@ export const captureNativePhoto = async (source: 'camera' | 'photos' = 'camera')
 
   try {
     const photo = await Camera.getPhoto({
-      quality: 85,
+      quality: 80,
+      width: 1600,
+      height: 1600,
       allowEditing: false,
       resultType: CameraResultType.Base64,
       source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,

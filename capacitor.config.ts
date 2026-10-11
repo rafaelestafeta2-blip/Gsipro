@@ -3,9 +3,9 @@ import { KeyboardResize, KeyboardStyle } from '@capacitor/keyboard';
 
 /**
  * Configuração do Capacitor - GSI PRO
- * Versão atual: 1.0.1 (Mantenha sincronizado com package.json e src/version.ts)
+ * Versão atual: 1.0.2 (Mantenha sincronizado com package.json e src/version.ts)
  */
-export const APP_VERSION = '1.0.1';
+export const APP_VERSION = '1.0.2';
 
 const config: CapacitorConfig = {
   appId: 'com.gsipro.app',

@@ -32,7 +32,6 @@ export async function configureAndroidNotificationChannel(): Promise<void> {
       description: 'Notificações urgentes de chamadas e mensagens em tempo real',
       importance: 5, // High importance (heads-up notification & sound)
       visibility: 1, // Public on lockscreen
-      sound: 'default',
       vibration: true,
       lights: true,
       lightColor: '#eab308'

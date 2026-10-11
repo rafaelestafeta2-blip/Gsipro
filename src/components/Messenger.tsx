@@ -60,6 +60,9 @@ import IncomingCallScreen from './IncomingCallScreen';
 import ActiveCallScreen, { CallStatusType } from './ActiveCallScreen';
 import { showGlobalToast } from '../lib/ToastContext';
 import { startIncomingCallRingtone, stopIncomingCallRingtone } from '../lib/sounds';
+import MediaLightboxModal from './MediaLightboxModal';
+import CachedImage from './CachedImage';
+import { precacheMediaUrls, compressImageFile, saveMediaLocally } from '../services/mediaCacheService';
 
 interface MessengerProps {
   isOpen?: boolean;
@@ -103,6 +106,19 @@ export default function Messenger({
   const [blockedBy, setBlockedBy] = useState<Block[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [groupUnreadCounts, setGroupUnreadCounts] = useState<Record<string, number>>({});
+  const [lightboxState, setLightboxState] = useState<{
+    isOpen: boolean;
+    mediaUrl: string;
+    senderName?: string;
+    timestamp?: string;
+    caption?: string;
+  }>({
+    isOpen: false,
+    mediaUrl: '',
+    senderName: '',
+    timestamp: '',
+    caption: ''
+  });
 
   // Group chat states
   const [groups, setGroups] = useState<ChatGroup[]>([]);
@@ -1714,6 +1730,11 @@ export default function Messenger({
           return true;
         });
 
+        const mediaUrlsToPrecache = parsed
+          .filter((msg: any) => msg.type === 'image' || (msg.media_url && typeof msg.media_url === 'string'))
+          .map((msg: any) => msg.media_url);
+        precacheMediaUrls(mediaUrlsToPrecache);
+
         setMessages(prev => {
           // Keep any local pending messages in flight
           const pending = prev.filter(m => m.sync_status === 'pending' || m.sync_status === 'sending');
@@ -1772,6 +1793,11 @@ export default function Messenger({
           }
           return true;
         });
+
+        const mediaUrlsToPrecache = parsed
+          .filter((msg: any) => msg.type === 'image' || (msg.media_url && typeof msg.media_url === 'string'))
+          .map((msg: any) => msg.media_url);
+        precacheMediaUrls(mediaUrlsToPrecache);
 
         setGroupMessages(prev => {
           // Keep any local pending messages in flight
@@ -2630,7 +2656,10 @@ export default function Messenger({
 
     setIsUploading(true);
     try {
-      const fileExt = selectedImageFile.name.split('.').pop() || 'jpg';
+      // 1. Otimiza e comprime a foto estilo WhatsApp antes do upload (reduz de 5MB para ~150KB)
+      const { file: compressedFile } = await compressImageFile(selectedImageFile);
+
+      const fileExt = compressedFile.name.split('.').pop() || 'jpg';
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = imageTargetIsGroup 
         ? `group-images/${selectedGroup?.id}/${fileName}`
@@ -2638,7 +2667,7 @@ export default function Messenger({
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, selectedImageFile);
+        .upload(filePath, compressedFile);
 
       if (uploadError) {
         alert('Erro ao carregar imagem: ' + (uploadError.message || 'Erro'));
@@ -2646,6 +2675,9 @@ export default function Messenger({
       }
 
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
+
+      // 2. Salva imediatamente no banco de dados local IndexedDB do aparelho (0ms de carregamento)
+      await saveMediaLocally(publicUrl, compressedFile);
 
       if (imageTargetIsGroup) {
         await sendGroupMessage('image', publicUrl, imageCaption, { is_view_once: isViewOnceSelected });
@@ -3693,13 +3725,20 @@ export default function Messenger({
                                 <span>Abrir no Google Maps (Navegar)</span>
                               </button>
                             </div>
-                          ) : msg.type === 'text' ? (
-                            <p className="leading-relaxed break-words text-[12px]">{msg.content}</p>
-                          ) : msg.type === 'image' ? (
-                            <img 
-                              src={msg.media_url} 
-                              className="max-w-full rounded-xl cursor-pointer hover:opacity-90 transition-all border border-black/10" 
-                              onClick={() => window.open(msg.media_url)} 
+                          ) : (msg.type === 'image' || (msg.media_url && !msg.media_url.endsWith('.webm') && !msg.media_url.endsWith('.mp4') && !msg.media_url.endsWith('.m4a') && !msg.media_url.endsWith('.aac') && !msg.media_url.endsWith('.ogg') && !msg.media_url.endsWith('.wav'))) ? (
+                            <CachedImage 
+                              src={msg.media_url || msg.content} 
+                              className="max-w-full rounded-xl border border-black/10" 
+                              onClick={() => {
+                                triggerLightHaptic();
+                                setLightboxState({
+                                  isOpen: true,
+                                  mediaUrl: msg.media_url || msg.content,
+                                  senderName: msg.sender_name || 'Membro do Grupo',
+                                  timestamp: format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm'),
+                                  caption: (msg.content && msg.content !== (msg.media_url || msg.content) && !msg.content.startsWith('http')) ? msg.content : ''
+                                });
+                              }} 
                               alt=""
                             />
                           ) : (msg.type === 'audio' || (msg.media_url && (msg.media_url.includes('/group-audio/') || msg.media_url.endsWith('.webm') || msg.media_url.endsWith('.mp4') || msg.media_url.endsWith('.m4a') || msg.media_url.endsWith('.aac') || msg.media_url.endsWith('.ogg') || msg.media_url.endsWith('.wav')))) ? (
@@ -4491,11 +4530,20 @@ export default function Messenger({
                             </div>
                           ) : msg.type === 'audio' || (msg.media_url && (msg.media_url.endsWith('.webm') || msg.media_url.endsWith('.mp4') || msg.media_url.endsWith('.m4a') || msg.media_url.endsWith('.aac') || msg.media_url.endsWith('.ogg') || msg.media_url.endsWith('.wav'))) || (typeof msg.content === 'string' && msg.content.startsWith('http') && (msg.content.includes('/chat-audio/') || msg.content.includes('/group-audio/') || msg.content.endsWith('.webm') || msg.content.endsWith('.mp4') || msg.content.endsWith('.m4a') || msg.content.endsWith('.aac') || msg.content.endsWith('.ogg') || msg.content.endsWith('.wav'))) ? (
                             <AudioPlayer src={msg.media_url || msg.content} isMe={isMe} />
-                          ) : msg.type === 'image' || (msg.media_url && (msg.media_url.includes('/group-images/') || msg.media_url.includes('/chat-images/'))) ? (
-                            <img 
+                          ) : msg.type === 'image' || (msg.media_url && !msg.media_url.endsWith('.webm') && !msg.media_url.endsWith('.mp4') && !msg.media_url.endsWith('.m4a') && !msg.media_url.endsWith('.aac') && !msg.media_url.endsWith('.ogg') && !msg.media_url.endsWith('.wav')) || (typeof msg.content === 'string' && (msg.content.startsWith('http') && (msg.content.includes('/chat-images/') || msg.content.includes('/group-images/') || msg.content.includes('/private-media/') || msg.content.match(/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i)))) ? (
+                            <CachedImage 
                               src={msg.media_url || msg.content} 
-                              className="max-w-full rounded-xl cursor-pointer hover:opacity-90 transition-all border border-black/10" 
-                              onClick={() => window.open(msg.media_url || msg.content)} 
+                              className="max-w-full rounded-xl border border-black/10" 
+                              onClick={() => {
+                                triggerLightHaptic();
+                                setLightboxState({
+                                  isOpen: true,
+                                  mediaUrl: msg.media_url || msg.content,
+                                  senderName: isMe ? 'Você' : (selectedUser?.full_name || 'Conversa'),
+                                  timestamp: format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm'),
+                                  caption: (msg.content && msg.content !== msg.media_url && !msg.content.startsWith('http')) ? msg.content : ''
+                                });
+                              }} 
                               alt=""
                             />
                           ) : (
@@ -5640,6 +5688,16 @@ export default function Messenger({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Visualizador de Imagens em Tela Cheia estilo WhatsApp (In-App Lightbox) */}
+      <MediaLightboxModal
+        isOpen={lightboxState.isOpen}
+        onClose={() => setLightboxState(prev => ({ ...prev, isOpen: false }))}
+        mediaUrl={lightboxState.mediaUrl}
+        senderName={lightboxState.senderName}
+        timestamp={lightboxState.timestamp}
+        caption={lightboxState.caption}
+      />
     </motion.div>
   );
 }
