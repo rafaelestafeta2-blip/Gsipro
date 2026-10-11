@@ -38,6 +38,60 @@ jobs:
       - name: 📥 Clonar Repositório
         uses: actions/checkout@v4
 
+      - name: 📄 Garantir google-services.json no Android App
+        run: |
+          mkdir -p android/app
+          if [ -f "google-services.json" ]; then
+            cp google-services.json android/app/google-services.json
+            echo "✅ google-services.json copiado da raiz para android/app/"
+          elif [ -f "android/app/google-services.json" ]; then
+            echo "✅ google-services.json já existe em android/app/"
+          else
+            echo "⚠️ Criando google-services.json no workflow a partir das credenciais do Firebase..."
+            cat << 'EOF' > android/app/google-services.json
+{
+  "project_info": {
+    "project_number": "363493350499",
+    "project_id": "gen-lang-client-0974852104",
+    "storage_bucket": "gen-lang-client-0974852104.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:363493350499:android:3594a548b5c2098911ac56",
+        "android_client_info": {
+          "package_name": "com.gsipro.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "363493350499-ens7nomrcs1qoc4va3qg5245kaek05sk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdhMGwnN-fwFjdCG9swq9QS3Fcc-VaxJQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "363493350499-ens7nomrcs1qoc4va3qg5245kaek05sk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+EOF
+            echo "✅ google-services.json gerado com sucesso!"
+          fi
+
       - name: ☕ Configurar Java JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
