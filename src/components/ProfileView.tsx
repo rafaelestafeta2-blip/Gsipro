@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import SettingsView from './SettingsView';
 import ReportTemplate from './ReportTemplate';
+import { InstaChatIcon } from './InstaChatLogo';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toJpeg } from 'html-to-image';
@@ -115,36 +116,7 @@ const INITIAL_SAMPLE_POSTS: ProfileGalleryPost[] = [
   }
 ];
 
-const DEFAULT_SAMPLE_VISITORS: ProfileVisitor[] = [
-  {
-    id: 'vis-1',
-    full_name: 'Carlos Silva',
-    role: 'Mestre de Obra',
-    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    visited_at: new Date(Date.now() - 3600000 * 0.2).toISOString()
-  },
-  {
-    id: 'vis-2',
-    full_name: 'Ana Martins',
-    role: 'Encarregada de Obra',
-    avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    visited_at: new Date(Date.now() - 3600000 * 2.5).toISOString()
-  },
-  {
-    id: 'vis-3',
-    full_name: 'Ricardo Santos',
-    role: 'Oficial Eletricista',
-    avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    visited_at: new Date(Date.now() - 3600000 * 8).toISOString()
-  },
-  {
-    id: 'vis-4',
-    full_name: 'Mariana Costa',
-    role: 'Engenheira Civil',
-    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    visited_at: new Date(Date.now() - 3600000 * 22).toISOString()
-  }
-];
+const DEFAULT_SAMPLE_VISITORS: ProfileVisitor[] = [];
 
 const formatVisitTime = (visitedAt: string) => {
   try {
@@ -188,8 +160,14 @@ export default function ProfileView({
   // Social Network Features State
   const [bio, setBio] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
-  const [followersCount, setFollowersCount] = useState(248);
-  const [followingCount, setFollowingCount] = useState(112);
+  const [followersCount, setFollowersCount] = useState(() => {
+    const saved = localStorage.getItem(`instachat_followers_count_${userId}`);
+    return saved ? Number(saved) : 0;
+  });
+  const [followingCount, setFollowingCount] = useState(() => {
+    const saved = localStorage.getItem(`instachat_following_count_${userId}`);
+    return saved ? Number(saved) : 0;
+  });
   const [activeTab, setActiveTab] = useState<'gallery' | 'saved' | 'entries'>('gallery');
   
   // Edit Profile Modal
@@ -412,6 +390,17 @@ export default function ProfileView({
         console.warn('Could not sync followers_count to cloud:', err);
       }
     }
+    triggerSuccessHaptic();
+  };
+
+  // Delete Photo from Profile Gallery
+  const handleDeletePost = async (postId: string) => {
+    if (!confirm('Tens a certeza que pretendes eliminar esta fotografia da tua galeria?')) return;
+    triggerLightHaptic();
+    const updated = posts.filter(p => p.id !== postId);
+    setPosts(updated);
+    setSelectedPost(null);
+    await syncPostsToCloud(updated);
     triggerSuccessHaptic();
   };
 
@@ -704,8 +693,8 @@ export default function ProfileView({
       await triggerSuccessHaptic();
 
       await shareContent({
-        title: 'Folha de Ponto Mensal GSI PRO',
-        text: `Folha de ponto de ${format(viewDate, 'MMMM yyyy', { locale: ptBR })} gerada com sucesso.`,
+        title: 'Relatório Mensal Insta Chat',
+        text: `Relatório de ${format(viewDate, 'MMMM yyyy', { locale: ptBR })} gerado com sucesso.`,
         dialogTitle: 'Partilhar Folha de Ponto'
       });
     } catch (err) {
@@ -774,7 +763,7 @@ export default function ProfileView({
                 )}
                 <h2 className="text-2xl font-black uppercase tracking-tighter text-current">Perfil</h2>
                 <span className="text-[9px] font-mono px-2 py-0.5 rounded-full font-black uppercase tracking-wider" style={{ backgroundColor: `${activeTheme.accentColor}20`, color: activeTheme.accentColor }}>
-                  GSI PRO
+                  INSTA CHAT
                 </span>
               </div>
 
@@ -1066,6 +1055,12 @@ export default function ProfileView({
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
                         alt="Publicação" 
                       />
+
+                      {/* Discrete Instagram-style Watermark */}
+                      <div className="absolute bottom-1.5 right-1.5 z-10 bg-black/60 backdrop-blur-sm border border-white/10 px-1.5 py-0.5 rounded-md flex items-center gap-1 pointer-events-none">
+                        <InstaChatIcon size={10} />
+                        <span className="text-[7px] font-black bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">INSTA CHAT</span>
+                      </div>
 
                       {/* Hover Overlay with Likes & Comments */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white font-black text-xs">
@@ -1509,14 +1504,31 @@ export default function ProfileView({
                   </div>
                 </div>
 
-                <button onClick={() => setSelectedPost(null)} className="p-2 text-white/40 hover:text-white">
-                  <X size={20} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={() => handleDeletePost(selectedPost.id)} 
+                    className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                    title="Eliminar Publicação"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                  <button onClick={() => setSelectedPost(null)} className="p-2 text-white/40 hover:text-white">
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
               {/* Photo Display */}
               <div className="relative bg-black flex items-center justify-center max-h-[380px] overflow-hidden">
                 <img src={selectedPost.image_url} className="w-full max-h-[380px] object-contain" />
+                {/* Discrete Instagram-style Animated Watermark */}
+                <div className="absolute bottom-3 right-3 z-20 bg-black/60 backdrop-blur-md border border-white/15 px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-lg pointer-events-none animate-pulse">
+                  <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-500 flex items-center justify-center shadow-md p-0.5">
+                    <InstaChatIcon size={12} />
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">INSTA CHAT</span>
+                  <span className="text-[8px] font-medium text-white/70">@{selectedPost.author_name?.toLowerCase().replace(/\s+/g, '') || 'instachat'}</span>
+                </div>
               </div>
 
               {/* Interaction Bar (Likes, Comment Count, Save) */}

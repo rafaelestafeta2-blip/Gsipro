@@ -51,7 +51,10 @@ import {
   Wind,
   Droplets,
   Thermometer,
-  Compass
+  Compass,
+  CircleDashed,
+  Play,
+  Pause
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -101,8 +104,103 @@ export default function Messenger({
   initialDirectUserId,
   embedded = false
 }: MessengerProps) {
-  // Navigation tabs: 'direct' (private chats) or 'groups' (team groups)
-  const [activeTab, setActiveTab] = useState<'direct' | 'groups'>(initialTab);
+  // Navigation tabs: 'direct' (private chats) or 'groups' (team groups) or 'status' (WhatsApp Status)
+  const [activeTab, setActiveTab] = useState<'direct' | 'groups' | 'status'>(initialTab as any);
+
+  // Status (WhatsApp style) states
+  const [statuses, setStatuses] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('instachat_statuses');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      {
+        id: 'status-1',
+        userId: 'demo-user-1',
+        userName: 'Carlos Engenheiro',
+        userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        type: 'text',
+        content: 'Obra principal a todo vapor! 🏗️⚡ Concreto lançado com sucesso.',
+        background: 'from-amber-600 via-yellow-500 to-orange-600',
+        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+        views: []
+      },
+      {
+        id: 'status-2',
+        userId: 'demo-user-2',
+        userName: 'Mariana Arquiteta',
+        userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80',
+        type: 'image',
+        mediaUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb1964177?auto=format&fit=crop&w=800&q=80',
+        caption: 'Novos acabamentos de alto padrão no setor B ✨',
+        createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+        views: []
+      }
+    ];
+  });
+
+  const [showCreateStatusModal, setShowCreateStatusModal] = useState(false);
+  const [newStatusType, setNewStatusType] = useState<'text' | 'image'>('text');
+  const [newStatusContent, setNewStatusContent] = useState('');
+  const [newStatusMediaUrl, setNewStatusMediaUrl] = useState('');
+  const [newStatusBg, setNewStatusBg] = useState('from-amber-500 to-orange-600');
+  const [newStatusCaption, setNewStatusCaption] = useState('');
+
+  const [viewingStatusGroup, setViewingStatusGroup] = useState<{ userId: string; userName: string; userAvatar?: string; statuses: any[] } | null>(null);
+  const [currentStatusIndex, setCurrentStatusIndex] = useState(0);
+  const [isStatusPaused, setIsStatusPaused] = useState(false);
+  const [statusReplyInput, setStatusReplyInput] = useState('');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('instachat_statuses', JSON.stringify(statuses));
+    } catch {}
+  }, [statuses]);
+
+  // Status story viewer timer effect
+  useEffect(() => {
+    if (!viewingStatusGroup || isStatusPaused) return;
+    const timer = setInterval(() => {
+      setCurrentStatusIndex(prev => {
+        if (prev < viewingStatusGroup.statuses.length - 1) {
+          return prev + 1;
+        } else {
+          setViewingStatusGroup(null);
+          return 0;
+        }
+      });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [viewingStatusGroup, currentStatusIndex, isStatusPaused]);
+
+  const handlePostStatus = () => {
+    if (newStatusType === 'text' && !newStatusContent.trim()) return;
+    if (newStatusType === 'image' && !newStatusMediaUrl.trim()) return;
+
+    const newStatus = {
+      id: 'status-' + Date.now(),
+      userId: currentUserId,
+      userName: userName,
+      userAvatar: userAvatar,
+      type: newStatusType,
+      content: newStatusType === 'text' ? newStatusContent.trim() : undefined,
+      mediaUrl: newStatusType === 'image' ? newStatusMediaUrl.trim() : undefined,
+      background: newStatusType === 'text' ? newStatusBg : undefined,
+      caption: newStatusType === 'image' ? newStatusCaption.trim() : undefined,
+      createdAt: new Date().toISOString(),
+      views: []
+    };
+
+    setStatuses([newStatus, ...statuses]);
+    setShowCreateStatusModal(false);
+    setNewStatusContent('');
+    setNewStatusMediaUrl('');
+    setNewStatusCaption('');
+  };
+
+  const handleDeleteStatus = (id: string) => {
+    setStatuses(statuses.filter((s: any) => s.id !== id));
+  };
 
   useEffect(() => {
     if (initialTab) {
@@ -305,6 +403,7 @@ export default function Messenger({
   const [activeStickerPackId, setActiveStickerPackId] = useState<string>('favorites');
 
   // Custom & Favorite Stickers States
+  const [selectedStickerForAction, setSelectedStickerForAction] = useState<{ url: string; title: string; id?: string; emoji?: string } | null>(null);
   const [favoriteStickers, setFavoriteStickers] = useState<AnimatedSticker[]>(() => {
     try {
       const stored = localStorage.getItem(`instachat_favorite_stickers_${currentUserId}`);
@@ -3437,6 +3536,17 @@ export default function Messenger({
             <MessageSquare size={14} />
             Privadas ({profiles.length})
           </button>
+          <button 
+            onClick={() => setActiveTab('status')}
+            className={`flex-1 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'status'
+                ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20'
+                : 'text-white/40 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <CircleDashed size={14} />
+            Status
+          </button>
         </div>
       )}
 
@@ -3956,65 +4066,40 @@ export default function Messenger({
                             /* Weather Card */
                             <WeatherCardDisplay weather={msg.weather} />
                           ) : (msg.type === 'sticker' || msg.sticker_info || (typeof msg.content === 'string' && msg.content.includes('[Sticker Animado:'))) ? (
-                            /* WhatsApp Animated Sticker Display with Favorite & Resend Actions */
-                            <div className="relative group/st p-1 flex flex-col items-center justify-center my-1">
+                            /* WhatsApp Animated Sticker Display (Tap/Hold for options) */
+                            <div className="relative p-1 flex flex-col items-center justify-center my-1">
                               <motion.div
                                 initial={{ scale: 0.6, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
                                 transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                className="relative flex items-center justify-center"
+                                className="relative flex items-center justify-center cursor-pointer"
+                                onClick={() => {
+                                  triggerLightHaptic();
+                                  const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                  setSelectedStickerForAction({
+                                    url,
+                                    title: msg.sticker_info?.title || 'Sticker Animado',
+                                    id: msg.sticker_info?.id || `st-${msg.id}`,
+                                    emoji: msg.sticker_info?.emoji || '⭐'
+                                  });
+                                }}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  triggerLightHaptic();
+                                  const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                  setSelectedStickerForAction({
+                                    url,
+                                    title: msg.sticker_info?.title || 'Sticker Animado',
+                                    id: msg.sticker_info?.id || `st-${msg.id}`,
+                                    emoji: msg.sticker_info?.emoji || '⭐'
+                                  });
+                                }}
                               >
                                 <img
                                   src={msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')}
                                   alt={msg.sticker_info?.title || 'Sticker Animado'}
-                                  className="w-32 h-32 sm:w-36 sm:h-36 object-contain drop-shadow-xl hover:scale-105 transition-transform cursor-pointer"
-                                  onClick={() => triggerLightHaptic()}
+                                  className="w-32 h-32 sm:w-36 sm:h-36 object-contain drop-shadow-xl hover:scale-105 transition-transform"
                                 />
-                                {/* Sticker Action Toolbar */}
-                                <div className="absolute -bottom-3 flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 shadow-xl opacity-90 sm:opacity-0 group-hover/st:opacity-100 transition-all duration-200 z-10">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
-                                      toggleFavoriteSticker({
-                                        id: msg.sticker_info?.id || `st-msg-${msg.id}`,
-                                        title: msg.sticker_info?.title || 'Sticker do Chat',
-                                        category: 'obra',
-                                        url: url,
-                                        emoji: msg.sticker_info?.emoji || '⭐'
-                                      });
-                                    }}
-                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black transition-all ${
-                                      isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : ''))
-                                        ? 'bg-amber-400 text-slate-950 shadow-md'
-                                        : 'bg-white/10 hover:bg-white/20 text-amber-300'
-                                    }`}
-                                    title="Guardar nos Favoritos"
-                                  >
-                                    <Star size={11} fill={isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? "currentColor" : "none"} />
-                                    <span>{isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? 'Favorito' : 'Guardar'}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
-                                      handleSendSticker({
-                                        id: `st-resend-${Date.now()}`,
-                                        title: msg.sticker_info?.title || 'Sticker',
-                                        category: 'obra',
-                                        url: url,
-                                        emoji: msg.sticker_info?.emoji || '⭐'
-                                      });
-                                    }}
-                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-slate-950 text-[10px] font-black transition-all"
-                                    title="Reenviar este Sticker"
-                                  >
-                                    <Send size={10} />
-                                    <span>Enviar</span>
-                                  </button>
-                                </div>
                               </motion.div>
                             </div>
                           ) : (msg.type === 'image' || (msg.media_url && !msg.media_url.endsWith('.webm') && !msg.media_url.endsWith('.mp4') && !msg.media_url.endsWith('.m4a') && !msg.media_url.endsWith('.aac') && !msg.media_url.endsWith('.ogg') && !msg.media_url.endsWith('.wav'))) ? (
@@ -4871,65 +4956,40 @@ export default function Messenger({
                             /* Weather Card */
                             <WeatherCardDisplay weather={msg.weather} />
                           ) : (msg.type === 'sticker' || msg.sticker_info || (typeof msg.content === 'string' && msg.content.includes('[Sticker Animado:'))) ? (
-                            /* WhatsApp Animated Sticker Display with Favorite & Resend Actions */
-                            <div className="relative group/st p-1 flex flex-col items-center justify-center my-1">
+                            /* WhatsApp Animated Sticker Display (Tap/Hold for options) */
+                            <div className="relative p-1 flex flex-col items-center justify-center my-1">
                               <motion.div
                                 initial={{ scale: 0.6, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
                                 transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                className="relative flex items-center justify-center"
+                                className="relative flex items-center justify-center cursor-pointer"
+                                onClick={() => {
+                                  triggerLightHaptic();
+                                  const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                  setSelectedStickerForAction({
+                                    url,
+                                    title: msg.sticker_info?.title || 'Sticker Animado',
+                                    id: msg.sticker_info?.id || `st-${msg.id}`,
+                                    emoji: msg.sticker_info?.emoji || '⭐'
+                                  });
+                                }}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  triggerLightHaptic();
+                                  const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                  setSelectedStickerForAction({
+                                    url,
+                                    title: msg.sticker_info?.title || 'Sticker Animado',
+                                    id: msg.sticker_info?.id || `st-${msg.id}`,
+                                    emoji: msg.sticker_info?.emoji || '⭐'
+                                  });
+                                }}
                               >
                                 <img
                                   src={msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')}
                                   alt={msg.sticker_info?.title || 'Sticker Animado'}
-                                  className="w-32 h-32 sm:w-36 sm:h-36 object-contain drop-shadow-xl hover:scale-105 transition-transform cursor-pointer"
-                                  onClick={() => triggerLightHaptic()}
+                                  className="w-32 h-32 sm:w-36 sm:h-36 object-contain drop-shadow-xl hover:scale-105 transition-transform"
                                 />
-                                {/* Sticker Action Toolbar */}
-                                <div className="absolute -bottom-3 flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 shadow-xl opacity-90 sm:opacity-0 group-hover/st:opacity-100 transition-all duration-200 z-10">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
-                                      toggleFavoriteSticker({
-                                        id: msg.sticker_info?.id || `st-msg-${msg.id}`,
-                                        title: msg.sticker_info?.title || 'Sticker do Chat',
-                                        category: 'obra',
-                                        url: url,
-                                        emoji: msg.sticker_info?.emoji || '⭐'
-                                      });
-                                    }}
-                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black transition-all ${
-                                      isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : ''))
-                                        ? 'bg-amber-400 text-slate-950 shadow-md'
-                                        : 'bg-white/10 hover:bg-white/20 text-amber-300'
-                                    }`}
-                                    title="Guardar nos Favoritos"
-                                  >
-                                    <Star size={11} fill={isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? "currentColor" : "none"} />
-                                    <span>{isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? 'Favorito' : 'Guardar'}</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
-                                      handleSendSticker({
-                                        id: `st-resend-${Date.now()}`,
-                                        title: msg.sticker_info?.title || 'Sticker',
-                                        category: 'obra',
-                                        url: url,
-                                        emoji: msg.sticker_info?.emoji || '⭐'
-                                      });
-                                    }}
-                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-slate-950 text-[10px] font-black transition-all"
-                                    title="Reenviar este Sticker"
-                                  >
-                                    <Send size={10} />
-                                    <span>Enviar</span>
-                                  </button>
-                                </div>
                               </motion.div>
                             </div>
                           ) : msg.type === 'audio' || (msg.media_url && (msg.media_url.endsWith('.webm') || msg.media_url.endsWith('.mp4') || msg.media_url.endsWith('.m4a') || msg.media_url.endsWith('.aac') || msg.media_url.endsWith('.ogg') || msg.media_url.endsWith('.wav'))) || (typeof msg.content === 'string' && msg.content.startsWith('http') && (msg.content.includes('/chat-audio/') || msg.content.includes('/group-audio/') || msg.content.endsWith('.webm') || msg.content.endsWith('.mp4') || msg.content.endsWith('.m4a') || msg.content.endsWith('.aac') || msg.content.endsWith('.ogg') || msg.content.endsWith('.wav'))) ? (
@@ -5416,7 +5476,7 @@ export default function Messenger({
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={16} />
               <input 
                 type="text" 
-                placeholder={activeTab === 'groups' ? "Pesquisar grupo da equipe..." : "Pesquisar colega de obra..."}
+                placeholder={activeTab === 'groups' ? "Pesquisar grupo da equipe..." : activeTab === 'status' ? "Pesquisar status..." : "Pesquisar colega de obra..."}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-[#0a0e17] border border-white/5 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold text-white outline-none focus:border-[#d4af37]/50 transition-all"
@@ -5428,6 +5488,112 @@ export default function Messenger({
               {loading ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="animate-spin text-[#d4af37]" size={32} />
+                </div>
+              ) : activeTab === 'status' ? (
+                /* WHATSAPP-STYLE STATUS / STORIES TAB */
+                <div className="space-y-4 p-2">
+                  {/* My Status Card */}
+                  <div 
+                    onClick={() => setShowCreateStatusModal(true)}
+                    className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/10 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="relative flex-shrink-0">
+                      <div className="w-12 h-12 rounded-full border-2 border-[#d4af37] p-0.5 overflow-hidden bg-[#1c2431] flex items-center justify-center">
+                        {userAvatar ? (
+                          <img src={userAvatar} className="w-full h-full object-cover rounded-full" alt="" />
+                        ) : (
+                          <span className="text-white font-black text-sm">{userName.charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="absolute bottom-0 right-0 w-4 h-4 bg-[#d4af37] text-black rounded-full flex items-center justify-center font-black text-xs shadow-md">
+                        <Plus size={10} />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-black uppercase text-white group-hover:text-[#d4af37] transition-colors">
+                        Meu Status
+                      </h4>
+                      <p className="text-[10px] text-white/50 truncate">
+                        Toque para adicionar atualização de status (foto ou texto)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* My Posted Statuses List */}
+                  {statuses.filter((s: any) => s.userId === currentUserId).length > 0 && (
+                    <div className="space-y-2">
+                      <h5 className="text-[9px] font-black uppercase tracking-widest text-[#d4af37] px-1">Meus Status Publicados</h5>
+                      {statuses.filter((s: any) => s.userId === currentUserId).map((status: any) => (
+                        <div key={status.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {status.type === 'text' ? (
+                              <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${status.background || 'from-amber-500 to-orange-600'} flex items-center justify-center text-white font-bold text-xs p-1 truncate`}>
+                                {status.content?.substring(0, 15)}...
+                              </div>
+                            ) : (
+                              <img src={status.mediaUrl} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-white truncate">{status.content || status.caption || 'Status de Mídia'}</p>
+                              <p className="text-[9px] text-white/40">{new Date(status.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {status.views?.length || 0} visualizações</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDeleteStatus(status.id); }}
+                            className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                            title="Excluir status"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Recent Updates from Friends */}
+                  <div className="space-y-2 pt-2">
+                    <h5 className="text-[9px] font-black uppercase tracking-widest text-white/40 px-1">Atualizações Recentes</h5>
+                    {Array.from(new Set(statuses.filter((s: any) => s.userId !== currentUserId).map((s: any) => s.userId))).map(uid => {
+                      const userStatuses = statuses.filter((s: any) => s.userId === uid);
+                      if (userStatuses.length === 0) return null;
+                      const author = userStatuses[0];
+                      return (
+                        <div 
+                          key={uid}
+                          onClick={() => {
+                            setViewingStatusGroup({
+                              userId: uid,
+                              userName: author.userName,
+                              userAvatar: author.userAvatar,
+                              statuses: userStatuses
+                            });
+                            setCurrentStatusIndex(0);
+                          }}
+                          className="w-full flex items-center gap-3.5 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/5 border border-white/5 transition-all text-left cursor-pointer group"
+                        >
+                          <div className="relative flex-shrink-0">
+                            <div className="w-12 h-12 rounded-full border-2 p-0.5 overflow-hidden bg-[#1c2431] flex items-center justify-center bg-gradient-to-tr from-[#d4af37] to-[#0084ff]">
+                              <div className="w-full h-full rounded-full overflow-hidden bg-black flex items-center justify-center">
+                                {author.userAvatar ? (
+                                  <img src={author.userAvatar} className="w-full h-full object-cover rounded-full" alt="" />
+                                ) : (
+                                  <span className="text-white font-black text-xs">{author.userName.charAt(0)}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-black uppercase text-white group-hover:text-[#d4af37] transition-colors truncate">
+                              {author.userName}
+                            </h4>
+                            <p className="text-[10px] text-white/40 truncate">
+                              {userStatuses.length} {userStatuses.length === 1 ? 'atualização' : 'atualizações'} • {new Date(author.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : activeTab === 'groups' ? (
                 /* GROUPS LIST */
@@ -6691,6 +6857,378 @@ export default function Messenger({
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* WhatsApp-style Sticker Action Modal on Tap/Hold */}
+      <AnimatePresence>
+        {selectedStickerForAction && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" 
+            onClick={() => setSelectedStickerForAction(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-[#111b21] border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center space-y-4 text-white" 
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-24 h-24 flex items-center justify-center bg-black/40 rounded-2xl p-2 border border-white/10 shadow-inner">
+                <img src={selectedStickerForAction.url} alt="Sticker" className="w-full h-full object-contain drop-shadow-lg" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-base font-black uppercase tracking-wider">{selectedStickerForAction.title}</h3>
+                <p className="text-[10px] text-white/50 mt-0.5">Opções do Sticker (Estilo WhatsApp)</p>
+              </div>
+              <div className="w-full space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerSuccessHaptic();
+                    toggleFavoriteSticker({
+                      id: selectedStickerForAction.id || `st-${Date.now()}`,
+                      title: selectedStickerForAction.title,
+                      category: 'obra',
+                      url: selectedStickerForAction.url,
+                      emoji: selectedStickerForAction.emoji || '⭐'
+                    });
+                    setSelectedStickerForAction(null);
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
+                >
+                  <Star size={16} fill={isStickerFavorited(selectedStickerForAction.url) ? 'currentColor' : 'none'} />
+                  <span>{isStickerFavorited(selectedStickerForAction.url) ? 'Remover dos Favoritos' : '⭐ Adicionar aos Favoritos'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerLightHaptic();
+                    handleSendSticker({
+                      id: `st-resend-${Date.now()}`,
+                      title: selectedStickerForAction.title,
+                      category: 'obra',
+                      url: selectedStickerForAction.url,
+                      emoji: selectedStickerForAction.emoji || '⭐'
+                    });
+                    setSelectedStickerForAction(null);
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
+                >
+                  <Send size={16} />
+                  <span>Enviar Sticker no Chat</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStickerForAction(null)}
+                  className="w-full py-2.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white/70 font-semibold text-xs transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Create Status Modal */}
+      <AnimatePresence>
+        {showCreateStatusModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setShowCreateStatusModal(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-[#111b21] border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col space-y-4 text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-sm font-black uppercase tracking-wider text-[#d4af37]">Criar Novo Status</h3>
+                <button onClick={() => setShowCreateStatusModal(false)} className="p-1.5 hover:bg-white/5 rounded-full text-white/60 hover:text-white">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewStatusType('text')}
+                  className={`flex-1 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${newStatusType === 'text' ? 'bg-[#d4af37] text-black' : 'bg-white/5 text-white/60 hover:text-white'}`}
+                >
+                  Status de Texto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewStatusType('image')}
+                  className={`flex-1 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${newStatusType === 'image' ? 'bg-[#d4af37] text-black' : 'bg-white/5 text-white/60 hover:text-white'}`}
+                >
+                  Status de Foto/Mídia
+                </button>
+              </div>
+
+              {newStatusType === 'text' ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block mb-1">Texto do Status</label>
+                    <textarea
+                      rows={3}
+                      placeholder="O que está a acontecer na obra hoje?..."
+                      value={newStatusContent}
+                      onChange={(e) => setNewStatusContent(e.target.value)}
+                      className="w-full bg-[#0a0e17] border border-white/10 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block mb-1">Estilo do Fundo</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { label: 'Ouro', val: 'from-amber-600 via-yellow-500 to-orange-600' },
+                        { label: 'Noite', val: 'from-slate-900 via-indigo-950 to-slate-900' },
+                        { label: 'Esmeralda', val: 'from-emerald-700 via-teal-800 to-slate-900' },
+                        { label: 'Púrpura', val: 'from-purple-900 via-indigo-900 to-slate-900' }
+                      ].map(bg => (
+                        <button
+                          key={bg.val}
+                          type="button"
+                          onClick={() => setNewStatusBg(bg.val)}
+                          className={`h-10 rounded-xl bg-gradient-to-br ${bg.val} border-2 ${newStatusBg === bg.val ? 'border-white scale-105' : 'border-transparent opacity-60'} transition-all text-[9px] font-bold flex items-center justify-center`}
+                        >
+                          {bg.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block mb-1">Carregar Foto / Vídeo do Dispositivo ou URL</label>
+                    <div className="flex gap-2 items-center mb-2">
+                      <label className="flex-1 py-2.5 px-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#d4af37] text-white/80 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all">
+                        <Camera size={16} className="text-[#d4af37]" />
+                        <span>Escolher do Dispositivo</span>
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const url = URL.createObjectURL(file);
+                              setNewStatusMediaUrl(url);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <input
+                      type="url"
+                      placeholder="Ou cole o link da imagem/vídeo aqui..."
+                      value={newStatusMediaUrl}
+                      onChange={(e) => setNewStatusMediaUrl(e.target.value)}
+                      className="w-full bg-[#0a0e17] border border-white/10 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+
+                  {newStatusMediaUrl && (
+                    <div className="relative h-28 rounded-2xl overflow-hidden border border-white/10 bg-black">
+                      <img src={newStatusMediaUrl} alt="Preview" className="w-full h-full object-cover" onError={(e) => {(e.target as HTMLElement).style.display = 'none';}} />
+                      <button
+                        type="button"
+                        onClick={() => setNewStatusMediaUrl('')}
+                        className="absolute top-2 right-2 p-1 bg-black/70 hover:bg-red-600 rounded-full text-white transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block mb-1">Sugestões Rápidas (Fotos de Obras)</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Estrutura', url: 'https://images.unsplash.com/photo-1541888946425-d0fbb1964177?auto=format&fit=crop&w=800&q=80' },
+                        { label: 'Acabamento', url: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80' },
+                        { label: 'Projeto', url: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80' }
+                      ].map(preset => (
+                        <button
+                          key={preset.url}
+                          type="button"
+                          onClick={() => setNewStatusMediaUrl(preset.url)}
+                          className={`h-12 rounded-xl overflow-hidden relative border-2 ${newStatusMediaUrl === preset.url ? 'border-[#d4af37]' : 'border-white/10 opacity-70 hover:opacity-100'} transition-all`}
+                        >
+                          <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-[9px] font-black text-white">
+                            {preset.label}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block mb-1">Legenda (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Legenda premium..."
+                      value={newStatusCaption}
+                      onChange={(e) => setNewStatusCaption(e.target.value)}
+                      className="w-full bg-[#0a0e17] border border-white/10 rounded-2xl p-3 text-xs font-bold text-white outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateStatusModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 font-bold text-xs transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePostStatus}
+                  className="flex-1 py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29f30] text-black font-black text-xs uppercase tracking-wider shadow-lg transition-all active:scale-95"
+                >
+                  Publicar Status
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* WhatsApp Status Story Viewer Modal */}
+      <AnimatePresence>
+        {viewingStatusGroup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black flex flex-col justify-between select-none"
+          >
+            {/* Top Progress Bars */}
+            <div className="absolute top-0 inset-x-0 z-30 p-3 flex gap-1.5 bg-gradient-to-b from-black/80 to-transparent">
+              {viewingStatusGroup.statuses.map((st: any, idx: number) => (
+                <div key={st.id} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full bg-white transition-all duration-300 ${idx < currentStatusIndex ? 'w-full' : idx === currentStatusIndex ? 'w-full animate-pulse' : 'w-0'}`}
+                    style={{ transitionDuration: idx === currentStatusIndex ? '5s' : '0s' }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Author Header */}
+            <div className="absolute top-4 inset-x-0 z-30 px-4 pt-2 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full border border-white/20 overflow-hidden bg-black flex items-center justify-center">
+                  {viewingStatusGroup.userAvatar ? (
+                    <img src={viewingStatusGroup.userAvatar} className="w-full h-full object-cover" alt="" />
+                  ) : (
+                    <span className="text-white font-black text-xs">{viewingStatusGroup.userName.charAt(0)}</span>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-xs font-black uppercase text-white">{viewingStatusGroup.userName}</h4>
+                  <p className="text-[9px] text-white/60">{new Date(viewingStatusGroup.statuses[currentStatusIndex]?.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsStatusPaused(!isStatusPaused)}
+                  className="p-2 bg-black/40 hover:bg-black/60 rounded-full text-white backdrop-blur-md"
+                >
+                  {isStatusPaused ? <Play size={16} /> : <Pause size={16} />}
+                </button>
+                <button 
+                  onClick={() => setViewingStatusGroup(null)}
+                  className="p-2 bg-black/40 hover:bg-black/60 rounded-full text-white backdrop-blur-md"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Status Content Area */}
+            <div 
+              className="flex-1 flex items-center justify-center relative cursor-pointer"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                if (x < rect.width / 2) {
+                  if (currentStatusIndex > 0) setCurrentStatusIndex(currentStatusIndex - 1);
+                } else {
+                  if (currentStatusIndex < viewingStatusGroup.statuses.length - 1) {
+                    setCurrentStatusIndex(currentStatusIndex + 1);
+                  } else {
+                    setViewingStatusGroup(null);
+                  }
+                }
+              }}
+            >
+              {viewingStatusGroup.statuses[currentStatusIndex]?.type === 'text' ? (
+                <div className={`w-full h-full bg-gradient-to-br ${viewingStatusGroup.statuses[currentStatusIndex].background || 'from-amber-600 to-orange-600'} flex items-center justify-center p-8 text-center`}>
+                  <p className="text-xl sm:text-2xl font-black text-white tracking-wide drop-shadow-lg max-w-lg">
+                    {viewingStatusGroup.statuses[currentStatusIndex].content}
+                  </p>
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center relative">
+                  <img src={viewingStatusGroup.statuses[currentStatusIndex]?.mediaUrl} className="w-full h-full object-contain" alt="" />
+                  {viewingStatusGroup.statuses[currentStatusIndex]?.caption && (
+                    <div className="absolute bottom-20 inset-x-0 bg-black/60 backdrop-blur-md p-4 text-center">
+                      <p className="text-xs font-bold text-white">{viewingStatusGroup.statuses[currentStatusIndex].caption}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Reply Input Footer */}
+            <div className="p-4 bg-gradient-to-t from-black via-black/80 to-transparent z-30 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder={`Responder a ${viewingStatusGroup.userName}...`}
+                value={statusReplyInput}
+                onChange={(e) => setStatusReplyInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && statusReplyInput.trim()) {
+                    setSelectedUser({ id: viewingStatusGroup.userId, full_name: viewingStatusGroup.userName, avatar_url: viewingStatusGroup.userAvatar } as any);
+                    setActiveTab('direct');
+                    setViewingStatusGroup(null);
+                    setStatusReplyInput('');
+                  }
+                }}
+                className="flex-1 bg-white/10 border border-white/20 rounded-full py-3 px-5 text-xs text-white outline-none focus:border-[#d4af37]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (statusReplyInput.trim()) {
+                    setSelectedUser({ id: viewingStatusGroup.userId, full_name: viewingStatusGroup.userName, avatar_url: viewingStatusGroup.userAvatar } as any);
+                    setActiveTab('direct');
+                    setViewingStatusGroup(null);
+                    setStatusReplyInput('');
+                  }
+                }}
+                className="p-3 bg-[#d4af37] text-black rounded-full hover:bg-[#c29f30] transition-colors"
+              >
+                <Send size={16} />
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

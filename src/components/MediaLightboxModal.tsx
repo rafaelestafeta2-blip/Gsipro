@@ -8,6 +8,7 @@ import {
   ZoomOut, 
   Check
 } from 'lucide-react';
+import { InstaChatIcon } from './InstaChatLogo';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { downloadMediaFile, getCachedMediaSync, getCachedMediaUrl } from '../services/mediaCacheService';
@@ -253,6 +254,19 @@ export default function MediaLightboxModal({
             onDoubleClick={handleToggleZoom}
             draggable={false}
           />
+
+          {/* Discrete Instagram-style Animated Watermark */}
+          <div className="absolute bottom-6 right-6 z-30 bg-black/50 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-2xl pointer-events-none animate-pulse">
+            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-cyan-500 via-blue-500 to-purple-500 flex items-center justify-center shadow-md overflow-hidden p-0.5">
+              <InstaChatIcon size={16} />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">INSTA CHAT</span>
+            {senderName && (
+              <span className="text-[9px] font-medium text-white/80 border-l border-white/20 pl-2">
+                @{senderName.toLowerCase().replace(/\s+/g, '')}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Barra Inferior estilo WhatsApp com Legenda / Caption */}
