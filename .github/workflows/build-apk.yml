@@ -1,0 +1,177 @@
+name: Build Android APK (GSI PRO)
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Tipo de Compilação do APK (debug ou release)'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+      create_release:
+        description: 'Publicar automaticamente como GitHub Release?'
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Tag da Release (ex: v1.0.1 - opcional, se vazio usa data/commit)'
+        required: false
+        default: ''
+
+jobs:
+  build-apk:
+    name: Compilar APK Android
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Clonar Repositório
+        uses: actions/checkout@v4
+
+      - name: ☕ Configurar Java JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 📱 Configurar Licenças e SDK Android
+        run: |
+          echo "Configurando Android SDK em: $ANDROID_HOME"
+          mkdir -p "$ANDROID_HOME/licenses" || true
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n84831b9409646a233e85847926b9b405529e3773" > "$ANDROID_HOME/licenses/android-sdk-license" || true
+          echo -e "\n84831b9409646a233e85847926b9b405529e3773\n" > "$ANDROID_HOME/licenses/android-sdk-preview-license" || true
+          
+          SDKM=""
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          elif which sdkmanager > /dev/null 2>&1; then
+            SDKM=$(which sdkmanager)
+          fi
+          
+          if [ -n "$SDKM" ]; then
+            echo "Aceitando licenças via sdkmanager..."
+            yes | $SDKM --licenses || true
+            echo "Instalando plataforma Android 36 e ferramentas..."
+            $SDKM "platforms;android-36" "build-tools;36.0.0" "platforms;android-35" "build-tools;35.0.0" || true
+          fi
+
+      - name: 🟩 Configurar Node.js 22 (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 🏷️ Detectar Versão da Aplicação (src/version.ts)
+        run: |
+          VERSION=$(node -e "
+            const fs = require('fs');
+            try {
+              const content = fs.readFileSync('src/version.ts', 'utf8');
+              const match = content.match(/export\s+const\s+APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]/);
+              console.log(match ? match[1].trim() : '1.0.0');
+            } catch (e) {
+              console.log('1.0.0');
+            }
+          ")
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+          
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            TAG_TO_USE="${{ github.event.inputs.release_tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_TO_USE="${GITHUB_REF#refs/tags/}"
+          else
+            TAG_TO_USE="v$VERSION"
+          fi
+          
+          echo "RELEASE_TAG=$TAG_TO_USE" >> $GITHUB_ENV
+          echo "Versão detectada: $VERSION"
+          echo "Tag da Release: $TAG_TO_USE"
+
+      - name: 📦 Instalar Dependências do Projeto
+        run: npm install
+
+      - name: ⚡ Compilar Aplicação Web (Vite Build)
+        run: npm run build
+
+      - name: 📱 Verificar e Sincronizar Projeto Android (Capacitor)
+        run: |
+          if [ ! -d "android" ]; then
+            echo "Pasta android não encontrada. Inicializando plataforma Android nativa..."
+            npx cap add android
+          fi
+          npx cap sync android
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+      - name: 🔑 Permissão de Execução para Gradle Wrapper
+        run: chmod +x android/gradlew
+
+      - name: 🔨 Compilar APK com Gradle
+        run: |
+          cd android
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          if [ "${{ github.event.inputs.build_type }}" = "release" ]; then
+            echo "Compilando APK em modo RELEASE..."
+            ./gradlew assembleRelease --no-daemon --stacktrace
+          else
+            echo "Compilando APK em modo DEBUG (auto-assinado para instalação direta)..."
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          fi
+          cd ..
+
+      - name: 📂 Localizar e Organizar APK Gerado
+        run: |
+          mkdir -p build-artifacts
+          find android/app/build/outputs/apk/ -type f -name "*.apk" -exec cp {} build-artifacts/ \;
+          cd build-artifacts
+          for f in *.apk; do
+            if [ -f "$f" ]; then
+              cp "$f" "GSI_PRO_${RELEASE_TAG}.apk"
+              break
+            fi
+          done
+          echo "=== Arquivos APK gerados ==="
+          ls -lh
+
+      - name: 🚀 Disponibilizar APK nos Artifacts do Workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: GSI-PRO-${{ env.RELEASE_TAG }}-APK
+          path: build-artifacts/*.apk
+          retention-days: 30
+
+      - name: 🏷️ Publicar ou Atualizar GitHub Release com APK
+        if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))) || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "GSI PRO ${{ env.RELEASE_TAG }}"
+          files: build-artifacts/*.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📋 Resumo da Compilação
+        run: |
+          echo "### 🎉 APK Compilado com Sucesso!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "O APK do **GSI PRO** foi gerado com sucesso pelo GitHub Actions." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **App ID**: \`com.gsipro.app\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Modo**: ${{ github.event.inputs.build_type || 'debug' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⬇️ Como Baixar o APK:" >> $GITHUB_STEP_SUMMARY
+          echo "1. No topo desta página, role até a seção **Artifacts**." >> $GITHUB_STEP_SUMMARY
+          echo "2. Clique em **GSI-PRO-Android-APK** para baixar o arquivo zip com o APK." >> $GITHUB_STEP_SUMMARY
+          echo "3. Transfira para o seu celular Android e instale normalmente." >> $GITHUB_STEP_SUMMARY
