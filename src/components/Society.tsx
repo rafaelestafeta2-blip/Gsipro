@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { User, Clock, HardHat, Phone, Calendar, Search, Plus, Star, Briefcase, Home, MapPin, Users, MessageSquare } from 'lucide-react';
 import { getGamificationStats } from '../lib/gamification';
 import Messenger from './Messenger';
+import ProfileView from './ProfileView';
 
 export default function Society({ 
   isDarkMode = true, 
@@ -240,142 +241,20 @@ export default function Society({
         </AnimatePresence>
       </div>
 
-      {/* Profile Detail Modal */}
+      {/* Full Screen Premium Instagram-Style Profile View when clicking a colleague */}
       <AnimatePresence>
         {selectedProfile && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
-            onClick={() => setSelectedProfile(null)}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed inset-0 z-[120] bg-[#0a0e17] overflow-y-auto p-4 sm:p-6"
           >
-            <motion.div
-              initial={{ scale: 0.95, y: 30 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 30 }}
-              className={`w-full max-w-xl border rounded-[2.5rem] overflow-hidden max-h-[90vh] flex flex-col ${isDarkMode ? 'bg-[#0a0e17] border-white/10' : 'bg-white border-slate-200 shadow-2xl'}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Premium Carbon / Slate Header with Gold Highlight */}
-              <div className="relative h-48 bg-gradient-to-br from-[#1c2431] via-[#0f172a] to-[#0a0e17] border-b border-white/5 flex items-end">
-                {/* Close Button in Gold theme */}
-                <button 
-                  onClick={() => setSelectedProfile(null)}
-                  className="absolute top-6 right-6 w-11 h-11 bg-white/5 border border-white/10 hover:border-[#d4af37]/50 hover:bg-[#d4af37]/20 text-[#d4af37] rounded-full flex items-center justify-center backdrop-blur-md transition-all duration-300 z-30"
-                  title="Fechar"
-                >
-                  <Plus size={22} className="rotate-45" />
-                </button>
-
-                {/* Profile Image & Role section */}
-                <div className="absolute -bottom-16 left-8 flex items-end gap-5 z-20">
-                  <div className={`w-32 h-32 rounded-3xl border-4 overflow-hidden shadow-2xl transition-transform duration-500 hover:scale-105 ${isDarkMode ? 'bg-[#0a0e17] border-[#d4af37]' : 'bg-slate-50 border-[#d4af37]'}`}>
-                    {selectedProfile.avatar_url ? (
-                      <img src={selectedProfile.avatar_url} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className={`w-full h-full flex items-center justify-center ${isDarkMode ? 'bg-[#1c2431]' : 'bg-slate-100'}`}>
-                        <User size={48} className={isDarkMode ? 'text-slate-700' : 'text-slate-300'} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="mb-4">
-                    <h3 className={`text-2xl font-black uppercase tracking-tight leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                      {selectedProfile.full_name}
-                    </h3>
-                    <p className="text-[#d4af37] font-black uppercase tracking-[0.2em] text-[10px] mt-2 flex items-center gap-1.5">
-                      <Star size={11} className="fill-current" /> {selectedProfile.role}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Body */}
-              <div className="pt-20 p-8 overflow-y-auto space-y-8 custom-scrollbar">
-                {/* Contact and Rate Details (Premium Row) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Contact Card */}
-                  <div className={`p-5 ${isDarkMode ? 'bg-white/[0.02] border-white/5' : 'bg-slate-50 border-slate-200'} rounded-2xl border flex items-center gap-4 transition-all duration-300 hover:bg-white/[0.04]`}>
-                    <div className="p-3 bg-[#d4af37]/10 border border-[#d4af37]/20 rounded-xl text-[#d4af37]">
-                      <Phone size={18} />
-                    </div>
-                    <div>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-white/40' : 'text-slate-400'}`}>Contacto</p>
-                      <p className={`text-xs font-black mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{selectedProfile.phone || 'Privado'}</p>
-                    </div>
-                  </div>
-
-                  {/* Hourly Rate Card */}
-                  <div className={`p-5 ${isDarkMode ? 'bg-white/[0.02] border-white/5' : 'bg-slate-50 border-slate-200'} rounded-2xl border flex items-center gap-4 transition-all duration-300 hover:bg-white/[0.04]`}>
-                    <div className="p-3 bg-[#d4af37]/10 border border-[#d4af37]/20 rounded-xl text-[#d4af37]">
-                      <Clock size={18} />
-                    </div>
-                    <div>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-white/40' : 'text-slate-400'}`}>Taxa Horária</p>
-                      <p className={`text-xs font-black mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        €{selectedProfile.hourly_rate?.toFixed(2)} <span className="text-[10px] text-white/30 ml-0.5 font-bold">EUR</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Send Message Button */}
-                {selectedProfile.id !== currentUserId && (
-                  <button
-                    onClick={() => {
-                      const pid = selectedProfile.id;
-                      setSelectedProfile(null);
-                      if (onOpenMessenger) {
-                        onOpenMessenger('direct', pid);
-                      } else {
-                        setActiveTab('groups');
-                      }
-                    }}
-                    className="w-full py-3.5 bg-[#d4af37] text-black font-black text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 hover:bg-[#e5c158] active:scale-98 transition-all shadow-lg shadow-[#d4af37]/20"
-                  >
-                    <MessageSquare size={16} /> Enviar Mensagem no Chat
-                  </button>
-                )}
-
-                {/* Activity List Section */}
-                <div className="space-y-4">
-                  <h4 className={`text-[10px] font-black uppercase tracking-[0.25em] flex items-center gap-2 ${isDarkMode ? 'text-white/40' : 'text-slate-400'}`}>
-                    <Calendar size={13} className="text-[#d4af37]" /> Atividade Mensal Recente
-                  </h4>
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1.5 custom-scrollbar">
-                    {workerEntries.map((entry, eIdx) => (
-                      <div 
-                        key={entry.id ? `soc-entry-${entry.id}-${eIdx}` : `soc-entry-idx-${eIdx}`} 
-                        className={`p-4 border rounded-xl flex justify-between items-center transition-all ${
-                          isDarkMode 
-                            ? 'bg-white/[0.01] border-white/5 hover:bg-white/[0.03]' 
-                            : 'bg-white border-slate-100 hover:border-[#d4af37]/20'
-                        }`}
-                      >
-                        <div>
-                          <p className={`text-xs font-black uppercase tracking-wider ${isDarkMode ? 'text-white/90' : 'text-slate-900'}`}>
-                            {entry.day.toString().padStart(2, '0')}/{entry.month + 1}
-                          </p>
-                          <p className="text-[9px] font-bold uppercase mt-1 text-[#d4af37] tracking-wider">
-                            {entry.obra}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-[#d4af37] tracking-tight tabular-nums">{entry.hours}h</p>
-                        </div>
-                      </div>
-                    ))}
-                    {workerEntries.length === 0 && (
-                      <div className={`py-10 text-center rounded-xl border border-dashed ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                        <p className={`font-black text-[9px] uppercase tracking-widest ${isDarkMode ? 'text-white/20' : 'text-slate-300'}`}>
-                          Sem registos este mês
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+            <ProfileView 
+              userId={selectedProfile.id} 
+              currentUserId={currentUserId}
+              onBack={() => setSelectedProfile(null)}
+            />
           </motion.div>
         )}
       </AnimatePresence>

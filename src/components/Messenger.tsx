@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import DailyIframe, { DailyCall } from '@daily-co/daily-js';
 import { supabase } from '../services/supabaseClient';
-import { Profile, Message, Block, ChatGroup, GroupMember, GroupMessage, ReplyInfo, PollOption, PollData, LocationData } from '../types';
+import { Profile, Message, Block, ChatGroup, GroupMember, GroupMessage, ReplyInfo, PollOption, PollData, LocationData, WeatherData } from '../types';
+import { getWeatherByCoordinates, getWeatherByCityName } from '../services/weatherService';
 import { 
   X, 
   Send, 
@@ -41,7 +42,16 @@ import {
   Plus,
   Palette,
   Clock,
-  WifiOff
+  WifiOff,
+  Star,
+  Upload,
+  PlusCircle,
+  Sun,
+  CloudSun,
+  Wind,
+  Droplets,
+  Thermometer,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -63,6 +73,7 @@ import { startIncomingCallRingtone, stopIncomingCallRingtone } from '../lib/soun
 import MediaLightboxModal from './MediaLightboxModal';
 import CachedImage from './CachedImage';
 import { precacheMediaUrls, compressImageFile, saveMediaLocally } from '../services/mediaCacheService';
+import { ANIMATED_STICKERS_PACKS, AnimatedSticker } from '../data/animatedStickers';
 
 interface MessengerProps {
   isOpen?: boolean;
@@ -290,6 +301,176 @@ export default function Messenger({
 
   // WhatsApp-style Attachment Menu & Poll States
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [activeStickerPackId, setActiveStickerPackId] = useState<string>('favorites');
+
+  // Custom & Favorite Stickers States
+  const [favoriteStickers, setFavoriteStickers] = useState<AnimatedSticker[]>(() => {
+    try {
+      const stored = localStorage.getItem(`instachat_favorite_stickers_${currentUserId}`);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error('Error loading favorite stickers:', e);
+    }
+    // Default initial favorites
+    return [
+      ANIMATED_STICKERS_PACKS[0].stickers[0], // Guindaste
+      ANIMATED_STICKERS_PACKS[1].stickers[0], // Foguetão
+      ANIMATED_STICKERS_PACKS[1].stickers[1], // Fogo
+    ];
+  });
+
+  const [customStickers, setCustomStickers] = useState<AnimatedSticker[]>(() => {
+    try {
+      const stored = localStorage.getItem(`instachat_custom_stickers_${currentUserId}`);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error('Error loading custom stickers:', e);
+    }
+    return [];
+  });
+
+  // Custom Sticker Creator States
+  const [showCreateStickerModal, setShowCreateStickerModal] = useState(false);
+  const [newStickerTitle, setNewStickerTitle] = useState('');
+  const [newStickerEmoji, setNewStickerEmoji] = useState('👷');
+  const [newStickerPreviewUrl, setNewStickerPreviewUrl] = useState('');
+
+  const toggleFavoriteSticker = (sticker: AnimatedSticker) => {
+    triggerLightHaptic();
+    setFavoriteStickers(prev => {
+      const exists = prev.some(s => s.url === sticker.url || (sticker.id && s.id === sticker.id));
+      let updated: AnimatedSticker[];
+      if (exists) {
+        updated = prev.filter(s => s.url !== sticker.url && s.id !== sticker.id);
+        showGlobalToast('Sticker removido dos Favoritos', 'info');
+      } else {
+        updated = [sticker, ...prev];
+        showGlobalToast('Sticker guardado nos Favoritos! ⭐', 'success');
+      }
+      try {
+        localStorage.setItem(`instachat_favorite_stickers_${currentUserId}`, JSON.stringify(updated));
+      } catch (e) {
+        console.error('Error saving favorite stickers:', e);
+      }
+      return updated;
+    });
+  };
+
+  const isStickerFavorited = (urlOrId: string) => {
+    if (!urlOrId) return false;
+    return favoriteStickers.some(s => s.url === urlOrId || s.id === urlOrId);
+  };
+
+  const handleCreateCustomSticker = () => {
+    if (!newStickerPreviewUrl) {
+      showGlobalToast('Carrega uma imagem/GIF ou introduz um link válido', 'warning');
+      return;
+    }
+    triggerLightHaptic();
+    const createdSticker: AnimatedSticker = {
+      id: `custom-${Date.now()}`,
+      title: newStickerTitle.trim() || 'Meu Sticker Personalizado',
+      category: 'obra',
+      url: newStickerPreviewUrl,
+      emoji: newStickerEmoji || '🎨'
+    };
+
+    const updatedCustom = [createdSticker, ...customStickers];
+    setCustomStickers(updatedCustom);
+    try {
+      localStorage.setItem(`instachat_custom_stickers_${currentUserId}`, JSON.stringify(updatedCustom));
+    } catch (e) {
+      console.error('Error saving custom stickers:', e);
+    }
+
+    // Automatically add to favorites
+    const updatedFavs = [createdSticker, ...favoriteStickers.filter(s => s.url !== createdSticker.url)];
+    setFavoriteStickers(updatedFavs);
+    try {
+      localStorage.setItem(`instachat_favorite_stickers_${currentUserId}`, JSON.stringify(updatedFavs));
+    } catch (e) {
+      console.error('Error saving favorite stickers:', e);
+    }
+
+    showGlobalToast('Novo Sticker criado e guardado nos teus Favoritos! 🎨⭐', 'success');
+    setShowCreateStickerModal(false);
+    setNewStickerTitle('');
+    setNewStickerPreviewUrl('');
+    setActiveStickerPackId('custom');
+  };
+
+  // Real-time Weather States & Handlers
+  const [showWeatherModal, setShowWeatherModal] = useState(false);
+  const [isFetchingWeather, setIsFetchingWeather] = useState(false);
+  const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null);
+  const [weatherSearchCity, setWeatherSearchCity] = useState('');
+
+  const handleFetchWeatherGPS = async () => {
+    setIsFetchingWeather(true);
+    triggerLightHaptic();
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          const data = await getWeatherByCoordinates(lat, lon);
+          setCurrentWeather(data);
+          setIsFetchingWeather(false);
+          showGlobalToast(`Clima obtido para ${data.city} (${data.temp}°C)`, 'success');
+        },
+        async (error) => {
+          console.warn('GPS position error, falling back:', error);
+          const data = await getWeatherByCityName('Lisboa');
+          setCurrentWeather(data);
+          setIsFetchingWeather(false);
+          showGlobalToast('Localização GPS indisponível. A apresentar dados de Lisboa', 'info');
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      const data = await getWeatherByCityName('Lisboa');
+      setCurrentWeather(data);
+      setIsFetchingWeather(false);
+    }
+  };
+
+  const handleFetchWeatherByCity = async (city: string) => {
+    if (!city.trim()) return;
+    setIsFetchingWeather(true);
+    triggerLightHaptic();
+    const data = await getWeatherByCityName(city.trim());
+    setCurrentWeather(data);
+    setIsFetchingWeather(false);
+    showGlobalToast(`Clima obtido para ${data.city} (${data.temp}°C)`, 'success');
+  };
+
+  const handleOpenWeatherModal = () => {
+    setShowWeatherModal(true);
+    if (!currentWeather) {
+      handleFetchWeatherGPS();
+    }
+  };
+
+  const handleSendWeatherMessage = async () => {
+    if (!currentWeather) return;
+    triggerLightHaptic();
+    setShowWeatherModal(false);
+
+    const caption = `🌤️ Clima em ${currentWeather.city}: ${currentWeather.temp}°C, ${currentWeather.condition}`;
+    const metaOptions = {
+      type: 'weather',
+      weather: currentWeather
+    };
+
+    if (selectedGroup) {
+      await sendGroupMessage('weather', undefined, caption, metaOptions);
+    } else if (selectedUser) {
+      await sendMessage('weather', undefined, caption, metaOptions);
+    }
+
+    showGlobalToast('Meteorologia partilhada no chat! 🌤️', 'success');
+  };
   const [showPollModal, setShowPollModal] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState<Array<{ id: string; text: string; image_url?: string; file?: File; preview?: string }>>([
@@ -412,6 +593,7 @@ export default function Messenger({
     let deleted_for: string[] = msg.deleted_for || [];
     let poll: PollData | undefined = msg.poll;
     let location: LocationData | undefined = msg.location;
+    let weather: WeatherData | undefined = msg.weather;
 
     // 1. Parse metadata embedded in content
     if (typeof content === 'string' && content.includes('\n__GSI_META__')) {
@@ -440,6 +622,7 @@ export default function Messenger({
         if (Array.isArray(parsed.deleted_for)) deleted_for = parsed.deleted_for;
         if (parsed.poll) poll = parsed.poll;
         if (parsed.location) location = parsed.location;
+        if (parsed.weather) weather = parsed.weather;
         if (parsed.type) msg.type = parsed.type;
       } catch {}
     }
@@ -499,7 +682,8 @@ export default function Messenger({
       deleted_for,
       poll,
       location,
-      type: poll ? 'poll' : location ? 'location' : (msg.type || 'text')
+      weather,
+      type: poll ? 'poll' : location ? 'location' : weather ? 'weather' : (msg.type || 'text')
     };
   };
 
@@ -1973,10 +2157,10 @@ export default function Messenger({
   };
 
   const sendMessage = async (
-    type: 'text' | 'image' | 'audio' | 'location' | 'poll' = 'text', 
+    type: 'text' | 'image' | 'audio' | 'location' | 'poll' | 'sticker' | 'weather' = 'text', 
     mediaUrl?: string, 
     customCaption?: string,
-    metaOptions?: { is_view_once?: boolean; poll?: PollData; location?: LocationData; type?: string }
+    metaOptions?: { is_view_once?: boolean; poll?: PollData; location?: LocationData; weather?: WeatherData; type?: string; sticker_info?: any }
   ) => {
     if (!selectedUser || isUserBlocked || amIBlocked) return;
     if (type === 'text' && !newMessage.trim()) return;
@@ -2001,6 +2185,7 @@ export default function Messenger({
       type: metaOptions?.type || type,
       poll: metaOptions?.poll,
       location: metaOptions?.location,
+      weather: metaOptions?.weather,
       reply_to: replyingTo || undefined,
       is_view_once: isViewOnce,
       view_once_opened: false,
@@ -2132,10 +2317,10 @@ export default function Messenger({
   };
 
   const sendGroupMessage = async (
-    type: 'text' | 'image' | 'audio' | 'location' | 'poll' = 'text', 
+    type: 'text' | 'image' | 'audio' | 'location' | 'poll' | 'sticker' | 'weather' = 'text', 
     mediaUrl?: string, 
     customCaption?: string,
-    metaOptions?: { is_view_once?: boolean; poll?: PollData; location?: LocationData; type?: string }
+    metaOptions?: { is_view_once?: boolean; poll?: PollData; location?: LocationData; weather?: WeatherData; type?: string; sticker_info?: any }
   ) => {
     if (!selectedGroup) return;
     if (type === 'text' && !newMessage.trim()) return;
@@ -2163,6 +2348,7 @@ export default function Messenger({
         sender_name: userName,
         poll: metaOptions?.poll,
         location: metaOptions?.location,
+        weather: metaOptions?.weather,
         reply_to: replyingTo || undefined,
         is_view_once: isViewOnce,
         view_once_opened: false,
@@ -2326,6 +2512,31 @@ export default function Messenger({
       console.warn('Erro ao obter localização:', err);
       await triggerWarningHaptic();
       alert('Não foi possível obter o GPS. Certifique-se de que a localização está ativada no celular.');
+    }
+  };
+
+  // Send Animated WhatsApp Sticker
+  const handleSendSticker = async (sticker: AnimatedSticker) => {
+    setShowStickerPicker(false);
+    setShowAttachmentMenu(false);
+    triggerSuccessHaptic();
+
+    const stickerCaption = `[Sticker Animado: ${sticker.title}]`;
+    const metaOptions = {
+      type: 'sticker',
+      sticker_info: {
+        id: sticker.id,
+        url: sticker.url,
+        title: sticker.title,
+        category: sticker.category,
+        emoji: sticker.emoji
+      }
+    };
+
+    if (selectedGroup) {
+      await sendGroupMessage('sticker', sticker.url, stickerCaption, metaOptions);
+    } else if (selectedUser) {
+      await sendMessage('sticker', sticker.url, stickerCaption, metaOptions);
     }
   };
 
@@ -3741,6 +3952,71 @@ export default function Messenger({
                                 <span>Abrir no Google Maps (Navegar)</span>
                               </button>
                             </div>
+                          ) : (msg.type === 'weather' || msg.weather) ? (
+                            /* Weather Card */
+                            <WeatherCardDisplay weather={msg.weather} />
+                          ) : (msg.type === 'sticker' || msg.sticker_info || (typeof msg.content === 'string' && msg.content.includes('[Sticker Animado:'))) ? (
+                            /* WhatsApp Animated Sticker Display with Favorite & Resend Actions */
+                            <div className="relative group/st p-1 flex flex-col items-center justify-center my-1">
+                              <motion.div
+                                initial={{ scale: 0.6, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                className="relative flex items-center justify-center"
+                              >
+                                <img
+                                  src={msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')}
+                                  alt={msg.sticker_info?.title || 'Sticker Animado'}
+                                  className="w-32 h-32 sm:w-36 sm:h-36 object-contain drop-shadow-xl hover:scale-105 transition-transform cursor-pointer"
+                                  onClick={() => triggerLightHaptic()}
+                                />
+                                {/* Sticker Action Toolbar */}
+                                <div className="absolute -bottom-3 flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 shadow-xl opacity-90 sm:opacity-0 group-hover/st:opacity-100 transition-all duration-200 z-10">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                      toggleFavoriteSticker({
+                                        id: msg.sticker_info?.id || `st-msg-${msg.id}`,
+                                        title: msg.sticker_info?.title || 'Sticker do Chat',
+                                        category: 'obra',
+                                        url: url,
+                                        emoji: msg.sticker_info?.emoji || '⭐'
+                                      });
+                                    }}
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black transition-all ${
+                                      isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : ''))
+                                        ? 'bg-amber-400 text-slate-950 shadow-md'
+                                        : 'bg-white/10 hover:bg-white/20 text-amber-300'
+                                    }`}
+                                    title="Guardar nos Favoritos"
+                                  >
+                                    <Star size={11} fill={isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? "currentColor" : "none"} />
+                                    <span>{isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? 'Favorito' : 'Guardar'}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                      handleSendSticker({
+                                        id: `st-resend-${Date.now()}`,
+                                        title: msg.sticker_info?.title || 'Sticker',
+                                        category: 'obra',
+                                        url: url,
+                                        emoji: msg.sticker_info?.emoji || '⭐'
+                                      });
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-slate-950 text-[10px] font-black transition-all"
+                                    title="Reenviar este Sticker"
+                                  >
+                                    <Send size={10} />
+                                    <span>Enviar</span>
+                                  </button>
+                                </div>
+                              </motion.div>
+                            </div>
                           ) : (msg.type === 'image' || (msg.media_url && !msg.media_url.endsWith('.webm') && !msg.media_url.endsWith('.mp4') && !msg.media_url.endsWith('.m4a') && !msg.media_url.endsWith('.aac') && !msg.media_url.endsWith('.ogg') && !msg.media_url.endsWith('.wav'))) ? (
                             <CachedImage 
                               src={msg.media_url || msg.content} 
@@ -4062,6 +4338,53 @@ export default function Messenger({
                           <div>
                             <p className="text-xs font-black text-white leading-tight">Galeria</p>
                             <p className="text-[9px] text-white/40">Fotos do dispositivo</p>
+                          </div>
+                        </button>
+
+                        {/* 5. Stickers Animados */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAttachmentMenu(false);
+                            setShowStickerPicker(true);
+                            triggerLightHaptic();
+                          }}
+                          className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/5 text-left transition-all group"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-violet-500/20 text-violet-400 border border-violet-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Sparkles size={18} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-white leading-tight flex items-center gap-1">
+                              Stickers Animados
+                              <span className="text-[7.5px] font-black uppercase px-1.5 py-0.2 bg-emerald-500 text-black rounded-full">
+                                Novo
+                              </span>
+                            </p>
+                            <p className="text-[9px] text-white/40">Figurinhas animadas estilo WhatsApp</p>
+                          </div>
+                        </button>
+
+                        {/* 6. Meteorologia & Clima */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAttachmentMenu(false);
+                            handleOpenWeatherModal();
+                          }}
+                          className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/5 text-left transition-all group"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-400 border border-amber-400/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <CloudSun size={18} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-white leading-tight flex items-center gap-1">
+                              Meteorologia & Clima
+                              <span className="text-[7.5px] font-black uppercase px-1.5 py-0.2 bg-amber-400 text-slate-950 rounded-full">
+                                Ao Vivo
+                              </span>
+                            </p>
+                            <p className="text-[9px] text-white/40">Temperatura e tempo em tempo real</p>
                           </div>
                         </button>
                       </motion.div>
@@ -4544,6 +4867,71 @@ export default function Messenger({
                                 <span>Abrir no Google Maps (Navegar)</span>
                               </button>
                             </div>
+                          ) : (msg.type === 'weather' || msg.weather) ? (
+                            /* Weather Card */
+                            <WeatherCardDisplay weather={msg.weather} />
+                          ) : (msg.type === 'sticker' || msg.sticker_info || (typeof msg.content === 'string' && msg.content.includes('[Sticker Animado:'))) ? (
+                            /* WhatsApp Animated Sticker Display with Favorite & Resend Actions */
+                            <div className="relative group/st p-1 flex flex-col items-center justify-center my-1">
+                              <motion.div
+                                initial={{ scale: 0.6, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                                className="relative flex items-center justify-center"
+                              >
+                                <img
+                                  src={msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')}
+                                  alt={msg.sticker_info?.title || 'Sticker Animado'}
+                                  className="w-32 h-32 sm:w-36 sm:h-36 object-contain drop-shadow-xl hover:scale-105 transition-transform cursor-pointer"
+                                  onClick={() => triggerLightHaptic()}
+                                />
+                                {/* Sticker Action Toolbar */}
+                                <div className="absolute -bottom-3 flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 shadow-xl opacity-90 sm:opacity-0 group-hover/st:opacity-100 transition-all duration-200 z-10">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                      toggleFavoriteSticker({
+                                        id: msg.sticker_info?.id || `st-msg-${msg.id}`,
+                                        title: msg.sticker_info?.title || 'Sticker do Chat',
+                                        category: 'obra',
+                                        url: url,
+                                        emoji: msg.sticker_info?.emoji || '⭐'
+                                      });
+                                    }}
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black transition-all ${
+                                      isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : ''))
+                                        ? 'bg-amber-400 text-slate-950 shadow-md'
+                                        : 'bg-white/10 hover:bg-white/20 text-amber-300'
+                                    }`}
+                                    title="Guardar nos Favoritos"
+                                  >
+                                    <Star size={11} fill={isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? "currentColor" : "none"} />
+                                    <span>{isStickerFavorited(msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '')) ? 'Favorito' : 'Guardar'}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const url = msg.sticker_info?.url || msg.media_url || (typeof msg.content === 'string' && msg.content.includes('http') ? msg.content : '');
+                                      handleSendSticker({
+                                        id: `st-resend-${Date.now()}`,
+                                        title: msg.sticker_info?.title || 'Sticker',
+                                        category: 'obra',
+                                        url: url,
+                                        emoji: msg.sticker_info?.emoji || '⭐'
+                                      });
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-slate-950 text-[10px] font-black transition-all"
+                                    title="Reenviar este Sticker"
+                                  >
+                                    <Send size={10} />
+                                    <span>Enviar</span>
+                                  </button>
+                                </div>
+                              </motion.div>
+                            </div>
                           ) : msg.type === 'audio' || (msg.media_url && (msg.media_url.endsWith('.webm') || msg.media_url.endsWith('.mp4') || msg.media_url.endsWith('.m4a') || msg.media_url.endsWith('.aac') || msg.media_url.endsWith('.ogg') || msg.media_url.endsWith('.wav'))) || (typeof msg.content === 'string' && msg.content.startsWith('http') && (msg.content.includes('/chat-audio/') || msg.content.includes('/group-audio/') || msg.content.endsWith('.webm') || msg.content.endsWith('.mp4') || msg.content.endsWith('.m4a') || msg.content.endsWith('.aac') || msg.content.endsWith('.ogg') || msg.content.endsWith('.wav'))) ? (
                             <AudioPlayer src={msg.media_url || msg.content} isMe={isMe} />
                           ) : msg.type === 'image' || (msg.media_url && !msg.media_url.endsWith('.webm') && !msg.media_url.endsWith('.mp4') && !msg.media_url.endsWith('.m4a') && !msg.media_url.endsWith('.aac') && !msg.media_url.endsWith('.ogg') && !msg.media_url.endsWith('.wav')) || (typeof msg.content === 'string' && (msg.content.startsWith('http') && (msg.content.includes('/chat-images/') || msg.content.includes('/group-images/') || msg.content.includes('/private-media/') || msg.content.match(/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i)))) ? (
@@ -4882,6 +5270,53 @@ export default function Messenger({
                                 <div>
                                   <p className="text-xs font-black text-white leading-tight">Galeria</p>
                                   <p className="text-[9px] text-white/40">Fotos do dispositivo</p>
+                                </div>
+                              </button>
+
+                              {/* 5. Stickers Animados */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowAttachmentMenu(false);
+                                  setShowStickerPicker(true);
+                                  triggerLightHaptic();
+                                }}
+                                className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/5 text-left transition-all group"
+                              >
+                                <div className="w-9 h-9 rounded-xl bg-violet-500/20 text-violet-400 border border-violet-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                  <Sparkles size={18} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-black text-white leading-tight flex items-center gap-1">
+                                    Stickers Animados
+                                    <span className="text-[7.5px] font-black uppercase px-1.5 py-0.2 bg-emerald-500 text-black rounded-full">
+                                      Novo
+                                    </span>
+                                  </p>
+                                  <p className="text-[9px] text-white/40">Figurinhas animadas estilo WhatsApp</p>
+                                </div>
+                              </button>
+
+                              {/* 6. Meteorologia & Clima */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowAttachmentMenu(false);
+                                  handleOpenWeatherModal();
+                                }}
+                                className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/5 text-left transition-all group"
+                              >
+                                <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-400 border border-amber-400/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                  <CloudSun size={18} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-black text-white leading-tight flex items-center gap-1">
+                                    Meteorologia & Clima
+                                    <span className="text-[7.5px] font-black uppercase px-1.5 py-0.2 bg-amber-400 text-slate-950 rounded-full">
+                                      Ao Vivo
+                                    </span>
+                                  </p>
+                                  <p className="text-[9px] text-white/40">Temperatura e tempo em tempo real</p>
                                 </div>
                               </button>
                             </motion.div>
@@ -5705,6 +6140,561 @@ export default function Messenger({
         )}
       </AnimatePresence>
 
+      {/* WhatsApp Animated Sticker Picker Modal */}
+      <AnimatePresence>
+        {showStickerPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-md"
+            onClick={() => setShowStickerPicker(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-[#1f2c34] border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-5 space-y-4 shadow-2xl relative overflow-hidden"
+            >
+              {/* Sticker Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 text-white flex items-center justify-center shadow-lg">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                      Stickers & Figurinhos
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500 text-black font-black uppercase tracking-widest">
+                        WhatsApp
+                      </span>
+                    </h3>
+                    <p className="text-[10px] text-white/50 font-medium">
+                      Coleção, Favoritos ⭐ e Criador de Stickers
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerLightHaptic();
+                      setShowCreateStickerModal(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs shadow-md hover:brightness-110 transition-all active:scale-95"
+                  >
+                    <PlusCircle size={14} />
+                    <span>Criar Sticker</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowStickerPicker(false)}
+                    className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 transition-all active:scale-95"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Pack Selector Tabs */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {/* Favorites Tab */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerLightHaptic();
+                    setActiveStickerPackId('favorites');
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-black transition-all flex-shrink-0 border ${
+                    activeStickerPackId === 'favorites'
+                      ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md scale-105'
+                      : 'bg-white/5 text-amber-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <Star size={14} fill={activeStickerPackId === 'favorites' ? 'currentColor' : 'none'} />
+                  <span>Favoritos</span>
+                  <span className="ml-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-black/20">
+                    {favoriteStickers.length}
+                  </span>
+                </button>
+
+                {/* Custom Stickers Tab */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerLightHaptic();
+                    setActiveStickerPackId('custom');
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-black transition-all flex-shrink-0 border ${
+                    activeStickerPackId === 'custom'
+                      ? 'bg-gradient-to-r from-violet-500 to-indigo-500 text-white border-violet-400 shadow-md scale-105'
+                      : 'bg-white/5 text-violet-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <Palette size={14} />
+                  <span>Criados</span>
+                  <span className="ml-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-black/30">
+                    {customStickers.length}
+                  </span>
+                </button>
+
+                {/* Standard Packs */}
+                {ANIMATED_STICKERS_PACKS.map((pack) => {
+                  const isActive = activeStickerPackId === pack.id;
+                  return (
+                    <button
+                      key={pack.id}
+                      type="button"
+                      onClick={() => {
+                        triggerLightHaptic();
+                        setActiveStickerPackId(pack.id);
+                      }}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-black transition-all flex-shrink-0 border ${
+                        isActive
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md scale-105'
+                          : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-base">{pack.icon}</span>
+                      <span>{pack.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Sticker Grid / Empty States */}
+              <div className="max-h-[320px] min-h-[220px] overflow-y-auto p-2 bg-black/30 rounded-2xl border border-white/5 no-scrollbar">
+                {activeStickerPackId === 'favorites' ? (
+                  favoriteStickers.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8 text-center space-y-3 text-white/50">
+                      <div className="w-14 h-14 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-400 flex items-center justify-center">
+                        <Star size={28} />
+                      </div>
+                      <p className="text-sm font-bold text-white">Nenhum sticker nos favoritos ainda</p>
+                      <p className="text-xs max-w-xs text-white/50">
+                        Clica no botão ⭐ por cima de qualquer sticker enviado nas conversas ou grupos para guardar aqui!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {favoriteStickers.map((st) => (
+                        <div
+                          key={st.id}
+                          className="relative group p-2.5 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-amber-400/50 flex flex-col items-center justify-center gap-1 transition-all duration-200 hover:scale-105 shadow-md cursor-pointer"
+                          onClick={() => handleSendSticker(st)}
+                        >
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+                            <img
+                              src={st.url}
+                              alt={st.title}
+                              className="w-full h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform"
+                              loading="lazy"
+                            />
+                          </div>
+                          <span className="text-[10px] font-black text-white/80 truncate w-full text-center">
+                            {st.title}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavoriteSticker(st);
+                            }}
+                            className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-amber-400 hover:bg-black transition-all"
+                            title="Remover dos Favoritos"
+                          >
+                            <Star size={12} fill="currentColor" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : activeStickerPackId === 'custom' ? (
+                  customStickers.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8 text-center space-y-3 text-white/50">
+                      <div className="w-14 h-14 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 flex items-center justify-center">
+                        <Palette size={28} />
+                      </div>
+                      <p className="text-sm font-bold text-white">Ainda não tens stickers personalizados</p>
+                      <p className="text-xs max-w-xs text-white/50">
+                        Cria os teus próprios stickers com fotos da galeria ou GIFs da internet!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerLightHaptic();
+                          setShowCreateStickerModal(true);
+                        }}
+                        className="mt-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-500 text-white font-black text-xs shadow-lg flex items-center gap-2 hover:brightness-110 active:scale-95"
+                      >
+                        <PlusCircle size={14} />
+                        <span>Criar o meu Primeiro Sticker</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {customStickers.map((st) => (
+                        <div
+                          key={st.id}
+                          className="relative group p-2.5 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-violet-400/50 flex flex-col items-center justify-center gap-1 transition-all duration-200 hover:scale-105 shadow-md cursor-pointer"
+                          onClick={() => handleSendSticker(st)}
+                        >
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+                            <img
+                              src={st.url}
+                              alt={st.title}
+                              className="w-full h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform"
+                              loading="lazy"
+                            />
+                          </div>
+                          <span className="text-[10px] font-black text-white/80 truncate w-full text-center">
+                            {st.title}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavoriteSticker(st);
+                            }}
+                            className={`absolute top-1 right-1 p-1 rounded-full bg-black/60 transition-all ${
+                              isStickerFavorited(st.url) ? 'text-amber-400' : 'text-white/40 hover:text-amber-400'
+                            }`}
+                          >
+                            <Star size={12} fill={isStickerFavorited(st.url) ? 'currentColor' : 'none'} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  /* Standard Pack Stickers */
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                    {(ANIMATED_STICKERS_PACKS.find(p => p.id === activeStickerPackId)?.stickers || []).map((st) => (
+                      <div
+                        key={st.id}
+                        className="relative group p-2.5 rounded-2xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-emerald-500/50 flex flex-col items-center justify-center gap-1 transition-all duration-200 hover:scale-105 shadow-md cursor-pointer"
+                        onClick={() => handleSendSticker(st)}
+                      >
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+                          <img
+                            src={st.url}
+                            alt={st.title}
+                            className="w-full h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform"
+                            loading="lazy"
+                          />
+                        </div>
+                        <span className="text-[10px] font-black text-white/80 truncate w-full text-center">
+                          {st.title}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavoriteSticker(st);
+                          }}
+                          className={`absolute top-1 right-1 p-1 rounded-full bg-black/60 transition-all ${
+                            isStickerFavorited(st.url) ? 'text-amber-400' : 'text-white/40 hover:text-amber-400'
+                          }`}
+                          title="Guardar nos Favoritos"
+                        >
+                          <Star size={12} fill={isStickerFavorited(st.url) ? 'currentColor' : 'none'} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* WhatsApp Custom Sticker Creator Modal */}
+      <AnimatePresence>
+        {showCreateStickerModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowCreateStickerModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-[#1f2c34] border border-white/15 rounded-3xl p-5 space-y-4 shadow-2xl relative overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 flex items-center justify-center shadow-lg">
+                    <Palette size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white uppercase tracking-wider">
+                      Criar Teu Sticker
+                    </h3>
+                    <p className="text-[10px] text-white/50 font-medium">
+                      Personaliza o teu próprio sticker animado ou estático
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateStickerModal(false)}
+                  className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Upload or URL Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="custom-sticker-file"
+                    className="flex-1 cursor-pointer py-3 px-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center justify-center gap-2 text-emerald-400 font-black text-xs transition-all active:scale-95"
+                  >
+                    <Upload size={16} />
+                    <span>Carregar Foto / GIF</span>
+                  </label>
+                  <input
+                    id="custom-sticker-file"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          if (ev.target?.result) {
+                            setNewStickerPreviewUrl(ev.target.result as string);
+                            if (!newStickerTitle) {
+                              setNewStickerTitle(file.name.replace(/\.[^/.]+$/, ""));
+                            }
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="url"
+                    value={newStickerPreviewUrl}
+                    onChange={(e) => setNewStickerPreviewUrl(e.target.value)}
+                    placeholder="Ou cola o link da imagem/GIF (e.g. Giphy)"
+                    className="w-full bg-black/40 border border-white/10 focus:border-emerald-500 text-white text-xs px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white/30"
+                  />
+                </div>
+
+                {/* Sticker Title Input */}
+                <div>
+                  <label className="text-[10px] font-black uppercase text-white/60 tracking-wider block mb-1">
+                    Nome do Sticker:
+                  </label>
+                  <input
+                    type="text"
+                    value={newStickerTitle}
+                    onChange={(e) => setNewStickerTitle(e.target.value)}
+                    placeholder="Ex: Capataz da Obra, Café da Manhã"
+                    maxLength={30}
+                    className="w-full bg-black/40 border border-white/10 focus:border-emerald-500 text-white text-xs px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white/30"
+                  />
+                </div>
+
+                {/* Emoji Selector */}
+                <div>
+                  <label className="text-[10px] font-black uppercase text-white/60 tracking-wider block mb-1">
+                    Emoji de Identificação:
+                  </label>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                    {['👷', '🏗️', '🔨', '😂', '🔥', '🚀', '❤️', '🍻', '💯', '⚡', '😎', '👍', '☕'].map((em) => (
+                      <button
+                        key={em}
+                        type="button"
+                        onClick={() => {
+                          triggerLightHaptic();
+                          setNewStickerEmoji(em);
+                        }}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0 transition-all ${
+                          newStickerEmoji === em
+                            ? 'bg-emerald-500 scale-110 shadow-md'
+                            : 'bg-white/5 hover:bg-white/10'
+                        }`}
+                      >
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Live Preview */}
+                {newStickerPreviewUrl && (
+                  <div className="p-3 bg-black/50 border border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+                      Pré-visualização do Sticker:
+                    </span>
+                    <div className="w-24 h-24 relative flex items-center justify-center">
+                      <img
+                        src={newStickerPreviewUrl}
+                        alt="Preview"
+                        className="max-w-full max-h-full object-contain drop-shadow-2xl animate-pulse"
+                      />
+                      <span className="absolute top-0 right-0 text-sm">
+                        {newStickerEmoji}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateStickerModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 font-bold text-xs transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateCustomSticker}
+                  className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                >
+                  Criar & Guardar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Interactive Weather Modal */}
+      <AnimatePresence>
+        {showWeatherModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowWeatherModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-[#1f2c34] border border-white/15 rounded-3xl p-5 space-y-4 shadow-2xl relative overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 text-slate-950 flex items-center justify-center shadow-lg">
+                    <CloudSun size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white uppercase tracking-wider">
+                      Meteorologia & Clima
+                    </h3>
+                    <p className="text-[10px] text-white/50 font-medium">
+                      Temperatura e tempo em tempo real
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowWeatherModal(false)}
+                  className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Search / Location Bar */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={weatherSearchCity}
+                      onChange={(e) => setWeatherSearchCity(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleFetchWeatherByCity(weatherSearchCity);
+                      }}
+                      placeholder="Pesquisar cidade (ex: Lisboa, Porto, Faro)..."
+                      className="w-full bg-black/40 border border-white/10 focus:border-amber-400 text-white text-xs px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white/30"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleFetchWeatherByCity(weatherSearchCity)}
+                    className="px-3 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition-all"
+                  >
+                    Buscar
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleFetchWeatherGPS}
+                  className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-98"
+                >
+                  <Compass size={15} className="animate-spin-slow" />
+                  <span>🎯 Usar Localização GPS Atual</span>
+                </button>
+              </div>
+
+              {/* Weather Preview Card */}
+              <div className="min-h-[160px] flex items-center justify-center">
+                {isFetchingWeather ? (
+                  <div className="flex flex-col items-center justify-center p-6 space-y-2 text-white/60">
+                    <Loader2 size={32} className="animate-spin text-amber-400" />
+                    <p className="text-xs font-bold">A obter dados meteorológicos ao vivo...</p>
+                  </div>
+                ) : currentWeather ? (
+                  <div className="w-full">
+                    <WeatherCardDisplay weather={currentWeather} />
+                  </div>
+                ) : (
+                  <div className="text-center text-white/40 text-xs">
+                    Clica em "Usar Localização GPS Atual" ou pesquisa uma cidade.
+                  </div>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowWeatherModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 font-bold text-xs transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!currentWeather || isFetchingWeather}
+                  onClick={handleSendWeatherMessage}
+                  className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  Partilhar no Chat
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Visualizador de Imagens em Tela Cheia estilo WhatsApp (In-App Lightbox) */}
       <MediaLightboxModal
         isOpen={lightboxState.isOpen}
@@ -5715,5 +6705,71 @@ export default function Messenger({
         caption={lightboxState.caption}
       />
     </motion.div>
+  );
+}
+
+function WeatherCardDisplay({ weather }: { weather?: WeatherData }) {
+  if (!weather) return null;
+  const isNight = weather.is_day === false;
+  const code = weather.weather_code || 0;
+
+  let bgClass = 'bg-gradient-to-br from-amber-500 via-orange-600 to-amber-700';
+  if (isNight) {
+    bgClass = 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900';
+  } else if (code >= 50) {
+    bgClass = 'bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900';
+  }
+
+  return (
+    <div className="space-y-2 p-1 w-full max-w-[320px]">
+      <div className={`relative rounded-3xl overflow-hidden p-4 shadow-xl border border-white/20 text-white flex flex-col gap-3 ${bgClass}`}>
+        <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-white/20 blur-2xl pointer-events-none" />
+
+        <div className="flex items-center justify-between z-10">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <MapPin size={14} className="text-amber-300 flex-shrink-0 animate-bounce" />
+            <span className="text-xs font-black uppercase tracking-wider truncate">
+              {weather.city}, {weather.country || 'Portugal'}
+            </span>
+          </div>
+          <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-black/40 border border-white/20 backdrop-blur-md">
+            Ao Vivo
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between z-10 my-1">
+          <div>
+            <div className="flex items-start">
+              <span className="text-4xl font-black tracking-tight leading-none">
+                {weather.temp}
+              </span>
+              <span className="text-lg font-bold text-amber-200 ml-0.5">°C</span>
+            </div>
+            <p className="text-[11px] font-bold text-white/90 mt-1">
+              {weather.condition}
+            </p>
+          </div>
+
+          <div className="text-4xl sm:text-5xl drop-shadow-lg animate-pulse transform hover:scale-110 transition-transform">
+            {weather.icon}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-white/20 text-center z-10 bg-black/20 rounded-2xl p-2 backdrop-blur-md">
+          <div>
+            <span className="text-[8px] uppercase font-bold text-white/60 block">Sensação</span>
+            <span className="text-[11px] font-black text-amber-200">{weather.feels_like}°C</span>
+          </div>
+          <div>
+            <span className="text-[8px] uppercase font-bold text-white/60 block">Humidade</span>
+            <span className="text-[11px] font-black text-cyan-200">{weather.humidity}%</span>
+          </div>
+          <div>
+            <span className="text-[8px] uppercase font-bold text-white/60 block">Vento</span>
+            <span className="text-[11px] font-black text-emerald-200">{weather.wind_speed} km/h</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

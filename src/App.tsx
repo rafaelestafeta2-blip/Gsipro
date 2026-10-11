@@ -1,24 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { supabase } from './services/supabaseClient';
 import { TimeEntry, Profile } from './types';
 import { exportToPDF, exportToJPG } from './lib/pdfUtils';
 import ReportTemplate from './components/ReportTemplate';
 import Auth from './components/Auth';
-import Society from './components/Society';
-import ProfileView from './components/ProfileView';
-import WeeklyChart from './components/WeeklyChart';
 import AnimatedLogo from './components/AnimatedLogo';
 import ClockMarking from './components/ClockMarking';
-import AnnouncementBoard from './components/AnnouncementBoard';
-import SocialFeed from './components/SocialFeed';
-import ReelsView from './components/ReelsView';
-import Messenger from './components/Messenger';
 import FCMPushModal from './components/FCMPushModal';
 import AppUpdateModal from './components/AppUpdateModal';
 import InstaChatLogo from './components/InstaChatLogo';
 import { useAppTheme } from './lib/theme';
 import Onboarding, { ONBOARDING_STORAGE_KEY } from './components/Onboarding';
 import IncomingCallScreen from './components/IncomingCallScreen';
+
+// Lazy Loaded Secondary Screens for Code Splitting & Instant 60FPS Startup
+const Society = lazy(() => import('./components/Society'));
+const ProfileView = lazy(() => import('./components/ProfileView'));
+const WeeklyChart = lazy(() => import('./components/WeeklyChart'));
+const AnnouncementBoard = lazy(() => import('./components/AnnouncementBoard'));
+const SocialFeed = lazy(() => import('./components/SocialFeed'));
+const ReelsView = lazy(() => import('./components/ReelsView'));
+const Messenger = lazy(() => import('./components/Messenger'));
 import { checkForAppUpdate, ReleaseInfo } from './services/appUpdateService';
 import { 
   setupNativePushNotifications,
@@ -853,21 +855,30 @@ export default function App() {
     }
   };
 
-  const totalHours = entries.reduce((acc, curr) => {
-    if (!curr.hours) return acc;
-    const [h, m] = curr.hours.split(':').map(Number);
-    return acc + (isNaN(h) ? 0 : h) + (isNaN(m) ? 0 : m / 60);
-  }, 0);
+  const totalHours = useMemo(() => {
+    return entries.reduce((acc, curr) => {
+      if (!curr.hours) return acc;
+      const [h, m] = curr.hours.split(':').map(Number);
+      return acc + (isNaN(h) ? 0 : h) + (isNaN(m) ? 0 : m / 60);
+    }, 0);
+  }, [entries]);
 
-  const totalPayment = totalHours * parseFloat(hourlyRate || '0');
+  const totalPayment = useMemo(() => {
+    return totalHours * parseFloat(hourlyRate || '0');
+  }, [totalHours, hourlyRate]);
 
-  const stats = getGamificationStats(entries.length, profile?.role || 'Oficial');
+  const stats = useMemo(() => {
+    return getGamificationStats(entries.length, profile?.role || 'Oficial');
+  }, [entries.length, profile?.role]);
 
-  const hasMarkedToday = entries.some(e => 
-    e.day === new Date().getDate() && 
-    e.month === new Date().getMonth() && 
-    e.year === new Date().getFullYear()
-  );
+  const hasMarkedToday = useMemo(() => {
+    const today = new Date();
+    return entries.some(e => 
+      e.day === today.getDate() && 
+      e.month === today.getMonth() && 
+      e.year === today.getFullYear()
+    );
+  }, [entries]);
 
   if (isInitializing) {
     return (
@@ -954,7 +965,13 @@ export default function App() {
       )}
 
       <main className={`${isImmersive ? 'px-0 pt-0 pb-0' : 'px-6 pb-28'} space-y-8 relative z-10`}>
-        <AnimatePresence mode="wait">
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center p-12 space-y-3 text-slate-400 min-h-[300px]">
+            <div className="w-8 h-8 border-2 border-[#d4af37] border-t-transparent rounded-full animate-spin" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">A carregar ecrã...</span>
+          </div>
+        }>
+          <AnimatePresence mode="wait">
           {activeTab === 'home' && (
             <motion.div 
               key="home"
@@ -1154,6 +1171,7 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+        </Suspense>
       </main>
 
       {/* Mobile Navigation */}
@@ -1257,17 +1275,19 @@ export default function App() {
 
       <AnimatePresence>
         {isMessengerOpen && session && (
-          <Messenger 
-            currentUserId={session.user.id} 
-            userName={userName}
-            userAvatar={profile?.avatar_url}
-            initialTab={messengerTab}
-            initialDirectUserId={messengerTargetUserId}
-            onClose={() => setIsMessengerOpen(false)} 
-            onlineUsers={onlineUsers}
-            incomingCallSignal={incomingCallSignal}
-            onClearIncomingCallSignal={() => setIncomingCallSignal(null)}
-          />
+          <Suspense fallback={null}>
+            <Messenger 
+              currentUserId={session.user.id} 
+              userName={userName}
+              userAvatar={profile?.avatar_url}
+              initialTab={messengerTab}
+              initialDirectUserId={messengerTargetUserId}
+              onClose={() => setIsMessengerOpen(false)} 
+              onlineUsers={onlineUsers}
+              incomingCallSignal={incomingCallSignal}
+              onClearIncomingCallSignal={() => setIncomingCallSignal(null)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 

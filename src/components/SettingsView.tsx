@@ -66,6 +66,7 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
   const [hourlyRate, setHourlyRate] = useState('0');
   const [currentObra, setCurrentObra] = useState('');
   const [phone, setPhone] = useState('');
+  const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [locationCity, setLocationCity] = useState('');
   
@@ -101,6 +102,7 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
       setHourlyRate(data.hourly_rate?.toString() || '0');
       setCurrentObra(data.current_obra || '');
       setPhone(data.phone || '');
+      setBio(data.bio || '');
       setAvatarUrl(data.avatar_url || '');
       setLocationCity(data.location_city || '');
       setNotificationHour(data.notification_hour ?? 17);
@@ -189,6 +191,7 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
       hourly_rate: parseFloat(hourlyRate),
       current_obra: currentObra,
       phone,
+      bio,
       avatar_url: avatarUrl,
       location_city: locationCity,
       notification_hour: notificationHour,
@@ -319,6 +322,26 @@ export default function SettingsView({ userId, onBack, onUpdate, isDarkMode = tr
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: activeTheme.accentColor }} size={14} />
                   <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-[#0a0e17] border-none rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white outline-none" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Biografia (Bio)</label>
+                  <span className={`text-[10px] font-mono font-bold ${bio.length > 140 ? 'text-amber-400' : 'text-white/40'}`}>
+                    {bio.length}/150
+                  </span>
+                </div>
+                <div className="relative">
+                  <textarea 
+                    maxLength={150}
+                    value={bio} 
+                    onChange={(e) => setBio(e.target.value)} 
+                    rows={2}
+                    placeholder="Conta algo sobre ti, a tua experiência na obra ou especialidade..."
+                    className="w-full bg-[#0a0e17] border-none rounded-xl p-3 text-xs font-medium text-white outline-none resize-none focus:ring-1"
+                    style={{ accentColor: activeTheme.accentColor }}
+                  />
                 </div>
               </div>
 

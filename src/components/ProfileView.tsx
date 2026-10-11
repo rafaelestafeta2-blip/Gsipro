@@ -1,27 +1,181 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { Profile, TimeEntry } from '../types';
+import { Profile, TimeEntry, ProfileGalleryPost, ProfileGalleryComment, ProfileVisitor } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, LogOut, Save, Phone, Euro, HardHat, Settings, Briefcase, Camera, Upload, Loader2, Calendar as CalendarIcon, MapPin, ChevronRight, Home as HomeIcon, Download, ChevronLeft, X, Clock, Trash2, Palette } from 'lucide-react';
+import { 
+  User, LogOut, Save, Phone, Euro, HardHat, Settings, Briefcase, Camera, Upload, 
+  Loader2, Calendar as CalendarIcon, MapPin, ChevronRight, Home as HomeIcon, Download, 
+  ChevronLeft, X, Clock, Trash2, Palette, Heart, MessageCircle, Bookmark, Plus, 
+  Grid, Edit3, Share2, Send, FileText, Sparkles, Check, Users, UserCheck, ShieldCheck,
+  Eye
+} from 'lucide-react';
 import SettingsView from './SettingsView';
 import ReportTemplate from './ReportTemplate';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toJpeg } from 'html-to-image';
 import { shareContent } from '../lib/shareService';
-import { triggerSuccessHaptic, triggerLightHaptic } from '../lib/haptics';
+import { triggerSuccessHaptic, triggerLightHaptic, triggerWarningHaptic } from '../lib/haptics';
 import { isOnline } from '../services/networkService';
 import { addToQueue } from '../services/offlineSyncService';
 import { useAppTheme } from '../lib/theme';
+import { captureNativePhoto } from '../lib/cameraService';
+import { Capacitor } from '@capacitor/core';
+
+// Default initial sample posts for Instagram-style 3x3 grid
+const INITIAL_SAMPLE_POSTS: ProfileGalleryPost[] = [
+  {
+    id: 'post-1',
+    user_id: 'sample-user',
+    author_name: 'Mário Ferreira',
+    author_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    image_url: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b7?w=800&auto=format&fit=crop',
+    caption: 'Início do assentamento de estrutura de betão na obra de Lisboa. Rigor e qualidade em primeiro lugar! 🏗️👷‍♂️',
+    created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString(),
+    likes_count: 38,
+    liked_by: ['user-2', 'user-3'],
+    comments_count: 5,
+    comments: [
+      { id: 'c1', user_id: 'u1', author_name: 'António Silva', author_avatar: '', content: 'Excelente alinhamento, Mário! Bom trabalho.', created_at: new Date(Date.now() - 3600000 * 20).toISOString() },
+      { id: 'c2', user_id: 'u2', author_name: 'Rui Santos', author_avatar: '', content: 'Top! Amanhã levo a betoneira nova.', created_at: new Date(Date.now() - 3600000 * 18).toISOString() }
+    ],
+    is_saved: true
+  },
+  {
+    id: 'post-2',
+    user_id: 'sample-user',
+    author_name: 'Mário Ferreira',
+    author_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    image_url: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&auto=format&fit=crop',
+    caption: 'Aferição de nível laser e segurança no estaleiro. Equipa GSI no terreno! 📐⚡',
+    created_at: new Date(Date.now() - 3600000 * 24 * 5).toISOString(),
+    likes_count: 52,
+    liked_by: [],
+    comments_count: 3,
+    comments: [
+      { id: 'c3', user_id: 'u3', author_name: 'João Mestre', author_avatar: '', content: 'A segurança é sempre prioridade.', created_at: new Date(Date.now() - 3600000 * 24 * 4).toISOString() }
+    ],
+    is_saved: false
+  },
+  {
+    id: 'post-3',
+    user_id: 'sample-user',
+    author_name: 'Mário Ferreira',
+    author_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    image_url: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=800&auto=format&fit=crop',
+    caption: 'Fim de tarde na remodelação do piso superior. Mais um dia de metas cumpridas! 🌅🔨',
+    created_at: new Date(Date.now() - 3600000 * 24 * 8).toISOString(),
+    likes_count: 41,
+    liked_by: [],
+    comments_count: 2,
+    comments: [],
+    is_saved: true
+  },
+  {
+    id: 'post-4',
+    user_id: 'sample-user',
+    author_name: 'Mário Ferreira',
+    author_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    image_url: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&auto=format&fit=crop',
+    caption: 'Café da manhã reforçado com os colegas antes da betonagem. União da equipa! ☕🥐',
+    created_at: new Date(Date.now() - 3600000 * 24 * 12).toISOString(),
+    likes_count: 67,
+    liked_by: [],
+    comments_count: 8,
+    comments: [],
+    is_saved: false
+  },
+  {
+    id: 'post-5',
+    user_id: 'sample-user',
+    author_name: 'Mário Ferreira',
+    author_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    image_url: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&auto=format&fit=crop',
+    caption: 'Projeto arquitetónico aprovado e pronto para a próxima fase. Mãos à obra! 📋🏢',
+    created_at: new Date(Date.now() - 3600000 * 24 * 16).toISOString(),
+    likes_count: 89,
+    liked_by: [],
+    comments_count: 12,
+    comments: [],
+    is_saved: true
+  },
+  {
+    id: 'post-6',
+    user_id: 'sample-user',
+    author_name: 'Mário Ferreira',
+    author_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    image_url: 'https://images.unsplash.com/photo-1517581177682-a085bb7ffb15?w=800&auto=format&fit=crop',
+    caption: 'Entrega de chaves e vistoria final com aprovação a 100%. Orgulho da equipa! 🔑🏆',
+    created_at: new Date(Date.now() - 3600000 * 24 * 20).toISOString(),
+    likes_count: 104,
+    liked_by: [],
+    comments_count: 15,
+    comments: [],
+    is_saved: false
+  }
+];
+
+const DEFAULT_SAMPLE_VISITORS: ProfileVisitor[] = [
+  {
+    id: 'vis-1',
+    full_name: 'Carlos Silva',
+    role: 'Mestre de Obra',
+    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    visited_at: new Date(Date.now() - 3600000 * 0.2).toISOString()
+  },
+  {
+    id: 'vis-2',
+    full_name: 'Ana Martins',
+    role: 'Encarregada de Obra',
+    avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+    visited_at: new Date(Date.now() - 3600000 * 2.5).toISOString()
+  },
+  {
+    id: 'vis-3',
+    full_name: 'Ricardo Santos',
+    role: 'Oficial Eletricista',
+    avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    visited_at: new Date(Date.now() - 3600000 * 8).toISOString()
+  },
+  {
+    id: 'vis-4',
+    full_name: 'Mariana Costa',
+    role: 'Engenheira Civil',
+    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    visited_at: new Date(Date.now() - 3600000 * 22).toISOString()
+  }
+];
+
+const formatVisitTime = (visitedAt: string) => {
+  try {
+    const date = new Date(visitedAt);
+    if (isNaN(date.getTime())) return 'recentemente';
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Agora mesmo';
+    if (diffMins < 60) return `Há ${diffMins} min`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `Há ${diffHours}h`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return 'Ontem';
+    return `Há ${diffDays} dias`;
+  } catch {
+    return 'recentemente';
+  }
+};
 
 export default function ProfileView({ 
   userId, 
+  currentUserId,
   isDarkMode = true,
-  onProfileUpdate 
+  onProfileUpdate,
+  onBack
 }: { 
   userId: string, 
+  currentUserId?: string,
   isDarkMode?: boolean,
-  onProfileUpdate?: (profile: Partial<Profile>) => void 
+  onProfileUpdate?: (profile: Partial<Profile>) => void,
+  onBack?: () => void
 }) {
   const { activeTheme } = useAppTheme();
   const [loading, setLoading] = useState(true);
@@ -30,32 +184,186 @@ export default function ProfileView({
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [viewDate, setViewDate] = useState(new Date());
   const [exporting, setExporting] = useState(false);
+  
+  // Social Network Features State
+  const [bio, setBio] = useState('');
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersCount, setFollowersCount] = useState(248);
+  const [followingCount, setFollowingCount] = useState(112);
+  const [activeTab, setActiveTab] = useState<'gallery' | 'saved' | 'entries'>('gallery');
+  
+  // Edit Profile Modal
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editRole, setEditRole] = useState<'Ajudante' | 'Oficial' | 'Motorista' | 'Encarregado' | 'Mestre de Obra'>('Oficial');
+  const [editCity, setEditCity] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Gallery Posts State
+  const [posts, setPosts] = useState<ProfileGalleryPost[]>([]);
+  const [selectedPost, setSelectedPost] = useState<ProfileGalleryPost | null>(null);
+  const [isNewPostOpen, setIsNewPostOpen] = useState(false);
+  const [newPostImage, setNewPostImage] = useState('');
+  const [newPostCaption, setNewPostCaption] = useState('');
+  const [newPostUploading, setNewPostUploading] = useState(false);
+  
+  // Lightbox Comments
+  const [commentText, setCommentText] = useState('');
+
+  // Time Entries Editing
   const [selectedDayEntry, setSelectedDayEntry] = useState<{ day: number, entry?: TimeEntry } | null>(null);
   const [editHours, setEditHours] = useState('8');
   const [editObra, setEditObra] = useState('');
   const [editIsAbsence, setEditIsAbsence] = useState(false);
   const [editAbsenceReason, setEditAbsenceReason] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Profile Visitors State
+  const [recentVisitors, setRecentVisitors] = useState<ProfileVisitor[]>([]);
+  const [showVisitorsModal, setShowVisitorsModal] = useState(false);
+  
   const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getProfile();
     getEntries();
-  }, [userId, viewDate]);
+    loadPostsAndSocialData();
+    handleVisitorTracking();
+  }, [userId, viewDate, currentUserId]);
+
+  const handleVisitorTracking = async () => {
+    try {
+      const cached = localStorage.getItem(`instachat_visitors_${userId}`);
+      let currentVisitors: ProfileVisitor[] = cached ? JSON.parse(cached) : DEFAULT_SAMPLE_VISITORS;
+
+      if (currentUserId && currentUserId !== userId) {
+        let visitorName = 'Utilizador Conectado';
+        let visitorAvatar = '';
+        let visitorRole = 'Colaborador';
+
+        if (isOnline()) {
+          const { data: vProfile } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url, role')
+            .eq('id', currentUserId)
+            .single();
+          if (vProfile) {
+            if (vProfile.full_name) visitorName = vProfile.full_name;
+            if (vProfile.avatar_url) visitorAvatar = vProfile.avatar_url;
+            if (vProfile.role) visitorRole = vProfile.role;
+          }
+        }
+
+        const newVisit: ProfileVisitor = {
+          id: currentUserId,
+          full_name: visitorName,
+          avatar_url: visitorAvatar,
+          role: visitorRole,
+          visited_at: new Date().toISOString()
+        };
+
+        const filtered = currentVisitors.filter(v => v.id !== currentUserId);
+        currentVisitors = [newVisit, ...filtered].slice(0, 10);
+
+        localStorage.setItem(`instachat_visitors_${userId}`, JSON.stringify(currentVisitors));
+
+        if (isOnline()) {
+          await supabase.from('profiles').update({
+            recent_visitors: currentVisitors,
+            updated_at: new Date().toISOString()
+          }).eq('id', userId);
+        }
+      }
+
+      setRecentVisitors(currentVisitors);
+    } catch (err) {
+      console.warn('Error tracking visitors:', err);
+      setRecentVisitors(DEFAULT_SAMPLE_VISITORS);
+    }
+  };
+
+  const loadPostsAndSocialData = () => {
+    try {
+      // Bio local cache
+      const storedBio = localStorage.getItem(`instachat_bio_${userId}`);
+      if (storedBio !== null) setBio(storedBio);
+
+      // Follower state
+      const storedFollowing = localStorage.getItem(`instachat_is_following_${userId}`);
+      if (storedFollowing !== null) setIsFollowing(storedFollowing === 'true');
+
+      // Gallery Posts cache
+      const storedPosts = localStorage.getItem(`instachat_posts_${userId}`);
+      if (storedPosts) {
+        const parsed = JSON.parse(storedPosts);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPosts(parsed);
+          return;
+        }
+      }
+      setPosts(INITIAL_SAMPLE_POSTS);
+      localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify(INITIAL_SAMPLE_POSTS));
+    } catch {
+      setPosts(INITIAL_SAMPLE_POSTS);
+    }
+  };
+
+  const syncPostsToCloud = async (updatedPosts: ProfileGalleryPost[]) => {
+    localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify(updatedPosts));
+    if (isOnline()) {
+      try {
+        await supabase.from('profiles').update({
+          gallery_posts: updatedPosts,
+          posts_count: updatedPosts.length,
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
+      } catch (err) {
+        console.warn('Cloud posts sync pending offline:', err);
+      }
+    }
+  };
 
   const getProfile = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (data) {
-      setProfile(data);
-      setEditObra(data.current_obra || '');
+      if (data) {
+        setProfile(data);
+        setEditObra(data.current_obra || '');
+        setEditName(data.full_name || '');
+        setEditRole(data.role || 'Oficial');
+        setEditCity(data.location_city || '');
+        const currentBio = data.bio || localStorage.getItem(`instachat_bio_${userId}`) || 'Oficial de Construção Civil • Apaixonado por grandes estruturas e trabalho de equipa na obra. 🏗️⚡';
+        setBio(currentBio);
+        setEditBio(currentBio);
+        if (data.followers_count !== undefined) setFollowersCount(data.followers_count);
+        if (data.following_count !== undefined) setFollowingCount(data.following_count);
+        if (Array.isArray(data.gallery_posts) && data.gallery_posts.length > 0) {
+          setPosts(data.gallery_posts);
+          localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify(data.gallery_posts));
+        }
+        if (Array.isArray(data.recent_visitors) && data.recent_visitors.length > 0) {
+          setRecentVisitors(data.recent_visitors);
+          localStorage.setItem(`instachat_visitors_${userId}`, JSON.stringify(data.recent_visitors));
+        }
+      } else {
+        const fallbackBio = localStorage.getItem(`instachat_bio_${userId}`) || 'Oficial de Construção Civil • Apaixonado por grandes estruturas e trabalho de equipa na obra. 🏗️⚡';
+        setBio(fallbackBio);
+        setEditBio(fallbackBio);
+      }
+    } catch {
+      const fallbackBio = localStorage.getItem(`instachat_bio_${userId}`) || 'Oficial de Construção Civil • Apaixonado por grandes estruturas e trabalho de equipa na obra. 🏗️⚡';
+      setBio(fallbackBio);
+      setEditBio(fallbackBio);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const getEntries = async () => {
@@ -83,6 +391,196 @@ export default function ProfileView({
         localStorage.setItem(localKey, JSON.stringify(data));
       }
     } catch {}
+  };
+
+  // Follow / Unfollow Toggle
+  const toggleFollow = async () => {
+    triggerLightHaptic();
+    const nextState = !isFollowing;
+    setIsFollowing(nextState);
+    const nextCount = nextState ? followersCount + 1 : Math.max(0, followersCount - 1);
+    setFollowersCount(nextCount);
+    localStorage.setItem(`instachat_is_following_${userId}`, String(nextState));
+
+    if (isOnline()) {
+      try {
+        await supabase.from('profiles').update({
+          followers_count: nextCount,
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
+      } catch (err) {
+        console.warn('Could not sync followers_count to cloud:', err);
+      }
+    }
+    triggerSuccessHaptic();
+  };
+
+  // Quick Save Edit Profile Modal
+  const handleSaveQuickProfile = async () => {
+    if (editBio.length > 150) {
+      alert('A biografia excede o limite de 150 carateres.');
+      return;
+    }
+    setSavingProfile(true);
+    triggerLightHaptic();
+    try {
+      const updates = {
+        id: userId,
+        full_name: editName,
+        bio: editBio,
+        role: editRole,
+        location_city: editCity,
+        followers_count: followersCount,
+        following_count: followingCount,
+        posts_count: posts.length,
+        updated_at: new Date().toISOString()
+      };
+
+      setBio(editBio);
+      localStorage.setItem(`instachat_bio_${userId}`, editBio);
+      setProfile(prev => prev ? { ...prev, ...updates } : null);
+
+      if (onProfileUpdate) onProfileUpdate(updates);
+
+      if (isOnline()) {
+        await supabase.from('profiles').upsert(updates);
+      }
+
+      await triggerSuccessHaptic();
+      setIsEditProfileOpen(false);
+    } catch (err: any) {
+      alert(err.message || 'Erro ao guardar perfil');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // Upload photo for New Post
+  const handleSelectNewPostPhoto = async (e?: React.ChangeEvent<HTMLInputElement>, nativeFile?: File) => {
+    let file = nativeFile || (e?.target.files && e.target.files[0]);
+    if (!file && Capacitor.isNativePlatform()) {
+      file = await captureNativePhoto('photos') || undefined;
+    }
+    if (!file) return;
+
+    setNewPostUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setNewPostImage(event.target?.result as string);
+        setNewPostUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setNewPostUploading(false);
+    }
+  };
+
+  // Create New Photo Post
+  const handlePublishPost = async () => {
+    if (!newPostImage) {
+      alert('Por favor seleciona uma fotografia para publicar.');
+      return;
+    }
+    triggerLightHaptic();
+
+    const newPostItem: ProfileGalleryPost = {
+      id: `post-${Date.now()}`,
+      user_id: userId,
+      author_name: profile?.full_name || 'Mário Ferreira',
+      author_avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      image_url: newPostImage,
+      caption: newPostCaption.trim(),
+      created_at: new Date().toISOString(),
+      likes_count: 1,
+      liked_by: [userId],
+      comments_count: 0,
+      comments: [],
+      is_saved: false
+    };
+
+    const updatedPosts = [newPostItem, ...posts];
+    setPosts(updatedPosts);
+    await syncPostsToCloud(updatedPosts);
+
+    setNewPostImage('');
+    setNewPostCaption('');
+    setIsNewPostOpen(false);
+    triggerSuccessHaptic();
+  };
+
+  // Like / Heart Post Toggle
+  const toggleLikePost = async (postId: string) => {
+    triggerLightHaptic();
+    const updated = posts.map(p => {
+      if (p.id === postId) {
+        const hasLiked = p.liked_by.includes(userId);
+        const nextLikedBy = hasLiked ? p.liked_by.filter(id => id !== userId) : [...p.liked_by, userId];
+        const nextLikesCount = hasLiked ? Math.max(0, p.likes_count - 1) : p.likes_count + 1;
+        const updatedPost = { ...p, liked_by: nextLikedBy, likes_count: nextLikesCount };
+        if (selectedPost && selectedPost.id === postId) {
+          setSelectedPost(updatedPost);
+        }
+        return updatedPost;
+      }
+      return p;
+    });
+    setPosts(updated);
+    await syncPostsToCloud(updated);
+  };
+
+  // Toggle Save / Bookmark
+  const toggleSavePost = async (postId: string) => {
+    triggerLightHaptic();
+    const updated = posts.map(p => {
+      if (p.id === postId) {
+        const nextSaved = !p.is_saved;
+        const updatedPost = { ...p, is_saved: nextSaved };
+        if (selectedPost && selectedPost.id === postId) {
+          setSelectedPost(updatedPost);
+        }
+        return updatedPost;
+      }
+      return p;
+    });
+    setPosts(updated);
+    await syncPostsToCloud(updated);
+  };
+
+  // Add Comment to Post
+  const handleAddComment = async (postId: string) => {
+    if (!commentText.trim()) return;
+    triggerLightHaptic();
+
+    const newComment: ProfileGalleryComment = {
+      id: `comm-${Date.now()}`,
+      user_id: userId,
+      author_name: profile?.full_name || 'Utilizador GSI',
+      author_avatar: profile?.avatar_url || '',
+      content: commentText.trim(),
+      created_at: new Date().toISOString()
+    };
+
+    const updated = posts.map(p => {
+      if (p.id === postId) {
+        const nextComments = [...p.comments, newComment];
+        const updatedPost = {
+          ...p,
+          comments: nextComments,
+          comments_count: nextComments.length
+        };
+        if (selectedPost && selectedPost.id === postId) {
+          setSelectedPost(updatedPost);
+        }
+        return updatedPost;
+      }
+      return p;
+    });
+
+    setPosts(updated);
+    await syncPostsToCloud(updated);
+    setCommentText('');
+    triggerSuccessHaptic();
   };
 
   const handleDayClick = (day: number, entry?: TimeEntry) => {
@@ -113,7 +611,6 @@ export default function ProfileView({
 
     const localKey = `entries_${viewDate.getMonth()}_${viewDate.getFullYear()}`;
 
-    // Update local state and cache immediately
     setEntries(prev => {
       const filtered = prev.filter(e => e.day !== selectedDayEntry.day);
       const updated = editHours === '0' && !editIsAbsence ? filtered : [...filtered, newEntry].sort((a, b) => a.day - b.day);
@@ -131,7 +628,6 @@ export default function ProfileView({
     }
 
     try {
-      // Delete existing for that day if any
       await supabase
         .from('time_entries')
         .delete()
@@ -140,7 +636,6 @@ export default function ProfileView({
         .eq('month', viewDate.getMonth())
         .eq('year', viewDate.getFullYear());
 
-      // Insert if not just a deletion (0 hours without absence)
       if (editHours !== '0' || editIsAbsence) {
         const { error } = await supabase.from('time_entries').insert([{
           user_id: userId,
@@ -159,7 +654,6 @@ export default function ProfileView({
       await getEntries();
       setSelectedDayEntry(null);
     } catch (err) {
-      console.warn('[ProfileView] Offline fallback for edit:', err);
       if (editHours !== '0' || editIsAbsence) {
         newEntry.sync_status = 'pending_sync';
         addToQueue('time_entry', newEntry);
@@ -197,8 +691,8 @@ export default function ProfileView({
       const dataUrl = await toJpeg(reportRef.current, { 
         quality: 0.95,
         backgroundColor: '#ffffff',
-        width: 794, // approx 210mm at 96dpi
-        height: 1123 // approx 297mm at 96dpi
+        width: 794,
+        height: 1123
       });
       
       const fileName = `Folha_Ponto_${format(viewDate, 'MM_yyyy')}.jpg`;
@@ -209,14 +703,12 @@ export default function ProfileView({
 
       await triggerSuccessHaptic();
 
-      // Partilha nativa no Android
       await shareContent({
         title: 'Folha de Ponto Mensal GSI PRO',
         text: `Folha de ponto de ${format(viewDate, 'MMMM yyyy', { locale: ptBR })} gerada com sucesso.`,
         dialogTitle: 'Partilhar Folha de Ponto'
       });
     } catch (err) {
-      console.error('Erro ao gerar JPG:', err);
       alert('Erro ao gerar o relatório. Tente novamente.');
     } finally {
       setExporting(false);
@@ -227,16 +719,13 @@ export default function ProfileView({
     if (confirm('Deseja sair da conta?')) {
       try {
         await supabase.auth.signOut();
-        // Force reload to clear all states and redirect to login
         window.location.href = '/';
       } catch (err) {
-        console.error('Logout failed:', err);
         window.location.reload();
       }
     }
   };
 
-  // Calendar Helpers
   const days = eachDayOfInterval({
     start: startOfMonth(viewDate),
     end: endOfMonth(viewDate)
@@ -252,6 +741,8 @@ export default function ProfileView({
   }, 0);
   const totalPayment = totalHours * (profile?.hourly_rate || 0);
 
+  const savedPosts = posts.filter(p => p.is_saved);
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <Loader2 className="animate-spin" style={{ color: activeTheme.accentColor }} size={32} />
@@ -259,367 +750,505 @@ export default function ProfileView({
   );
 
   return (
-    <div className="pb-20">
+    <div className="pb-24">
       <AnimatePresence mode="wait">
         {!showSettings ? (
           <motion.div
             key="profile-dashboard"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="max-w-2xl mx-auto space-y-8"
+            className="max-w-2xl mx-auto space-y-6"
           >
-            {/* Header Dashboard */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-black uppercase tracking-tighter text-white">Seu Perfil</h2>
+            {/* Top Bar Navigation */}
+            <div className="flex justify-between items-center px-1">
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setShowSettings(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 border border-cyan-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-cyan-500/10 text-[#00c2ff] hover:bg-[#00c2ff] hover:text-black"
-                >
-                  <Palette size={14} /> Temas
-                </button>
-                <button 
-                  onClick={() => setShowSettings(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 border rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-white/5 hover:bg-white/20"
-                  style={{ borderColor: activeTheme.styles.border, color: activeTheme.accentColor }}
-                >
-                  <Settings size={14} /> Ajustes
-                </button>
+                {onBack && (
+                  <button 
+                    onClick={onBack}
+                    className="flex items-center gap-1 px-3 py-1.5 border rounded-xl text-xs font-black uppercase tracking-wider transition-all bg-white/5 hover:bg-white/10 text-white mr-1"
+                    style={{ borderColor: activeTheme.styles.border }}
+                  >
+                    <ChevronLeft size={16} style={{ color: activeTheme.accentColor }} /> Voltar
+                  </button>
+                )}
+                <h2 className="text-2xl font-black uppercase tracking-tighter text-current">Perfil</h2>
+                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full font-black uppercase tracking-wider" style={{ backgroundColor: `${activeTheme.accentColor}20`, color: activeTheme.accentColor }}>
+                  GSI PRO
+                </span>
               </div>
+
+              {(!currentUserId || currentUserId === userId) && (
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setShowSettings(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 border rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-white/5 hover:bg-white/10"
+                    style={{ borderColor: activeTheme.styles.border, color: activeTheme.accentColor }}
+                  >
+                    <Palette size={14} /> Temas
+                  </button>
+                  <button 
+                    onClick={() => setShowSettings(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 border rounded-xl text-[10px] font-black uppercase tracking-wider transition-all bg-white/5 hover:bg-white/10 text-white/80"
+                    style={{ borderColor: activeTheme.styles.border }}
+                  >
+                    <Settings size={14} /> Ajustes
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Profile Info Card (Clean View) */}
-            <div className={`border rounded-[2.5rem] p-8 sm:p-10 flex flex-col items-center text-center space-y-6 shadow-2xl relative overflow-hidden transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}>
-              <div className="relative">
-                <div 
-                  className="w-32 h-32 rounded-full border-4 p-1 shadow-2xl"
-                  style={{ borderColor: activeTheme.accentColor }}
-                >
-                  <div className="w-full h-full rounded-full overflow-hidden border border-white/10">
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} className="w-full h-full object-cover" />
+            {/* Main Instagram-Style Profile Card */}
+            <div className={`border rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}>
+              
+              {/* Profile Avatar + Social Metrics Bar */}
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                
+                {/* Avatar with Glow Ring */}
+                <div className="relative flex-shrink-0">
+                  <div 
+                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 p-1 shadow-2xl transition-all"
+                    style={{ borderColor: activeTheme.accentColor }}
+                  >
+                    <div className="w-full h-full rounded-full overflow-hidden border border-white/10 bg-black/50">
+                      {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-black/40 flex items-center justify-center text-white/30 text-4xl font-black">
+                          {profile?.full_name?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Social Counters Bar (Publicações, Seguidores, A seguir) */}
+                <div className="flex-1 w-full space-y-4 text-center sm:text-left">
+                  <div>
+                    <h3 className="text-2xl font-black text-current tracking-tighter uppercase">{profile?.full_name}</h3>
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-1.5">
+                      <span 
+                        className="text-black text-[9px] font-black px-3 py-0.5 rounded-full uppercase tracking-widest shadow-md"
+                        style={{ backgroundColor: activeTheme.accentColor }}
+                      >
+                        {profile?.role}
+                      </span>
+                      {profile?.location_city && (
+                        <span className="bg-white/5 border border-white/10 text-white/70 text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+                          <HomeIcon size={10} style={{ color: activeTheme.accentColor }} /> {profile.location_city}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3 Metrics: Posts, Followers, Following */}
+                  <div className="grid grid-cols-3 gap-2 py-3 px-4 bg-black/20 rounded-2xl border border-white/5 text-center">
+                    <div>
+                      <p className="text-lg font-black text-current">{posts.length}</p>
+                      <p className="text-[8px] font-black uppercase tracking-wider text-white/40">Publicações</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-black text-current">{followersCount}</p>
+                      <p className="text-[8px] font-black uppercase tracking-wider text-white/40">Seguidores</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-black text-current">{followingCount}</p>
+                      <p className="text-[8px] font-black uppercase tracking-wider text-white/40">A seguir</p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons: Editar Perfil & Seguir */}
+                  <div className="flex gap-2 pt-1">
+                    {(!currentUserId || currentUserId === userId) ? (
+                      <button 
+                        onClick={() => setIsEditProfileOpen(true)}
+                        className="flex-1 py-2.5 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all text-current"
+                      >
+                        <Edit3 size={14} style={{ color: activeTheme.accentColor }} /> Editar Perfil
+                      </button>
                     ) : (
-                      <div className="w-full h-full bg-black/40 flex items-center justify-center text-white/20 text-4xl font-black">
-                        {profile?.full_name?.charAt(0).toUpperCase()}
-                      </div>
+                      <button 
+                        onClick={toggleFollow}
+                        className={`flex-1 py-2.5 px-5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 ${
+                          isFollowing 
+                            ? 'bg-white/10 border border-white/15 text-white/80' 
+                            : `${activeTheme.primaryBtnClass}`
+                        }`}
+                      >
+                        {isFollowing ? (
+                          <><UserCheck size={14} /> A Seguir</>
+                        ) : (
+                          <><Users size={14} /> Seguir</>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h3 className="text-3xl font-black text-white tracking-tighter uppercase">{profile?.full_name}</h3>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span 
-                    className="text-black text-[9px] font-black px-3.5 py-1 rounded-full uppercase tracking-widest shadow-md"
-                    style={{ backgroundColor: activeTheme.accentColor }}
-                  >
-                    {profile?.role}
+              {/* User Bio Section with 150 Limit Indicator */}
+              <div className="p-4 rounded-2xl bg-black/25 border border-white/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40 flex items-center gap-1.5">
+                    <FileText size={12} style={{ color: activeTheme.accentColor }} /> Biografia
                   </span>
-                  {profile?.location_city && (
-                    <span className="bg-white/5 border border-white/10 text-white/60 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest flex items-center gap-1">
-                      <HomeIcon size={10} style={{ color: activeTheme.accentColor }} /> {profile.location_city}
-                    </span>
-                  )}
+                  <span className="text-[9px] font-mono text-white/30">
+                    {bio.length}/150 carateres
+                  </span>
                 </div>
+                <p className="text-xs text-white/90 leading-relaxed font-medium italic">
+                  "{bio || 'Sem biografia definida. Toca em Editar Perfil para adicionar uma introdução!'}"
+                </p>
               </div>
 
-              <div className="w-full grid grid-cols-2 gap-4 pt-4">
-                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
-                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Horas no Mês</p>
-                  <p className="text-xl font-black flex items-center justify-center gap-2" style={{ color: activeTheme.accentColor }}>
-                    <Clock size={16} /> {totalHours.toFixed(1)}h
+              {/* Fast Stats Row (Horas & Previsto) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1 text-center">
+                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Horas / Mês</p>
+                  <p className="text-base font-black flex items-center justify-center gap-1.5" style={{ color: activeTheme.accentColor }}>
+                    <Clock size={14} /> {totalHours.toFixed(1)}h
                   </p>
                 </div>
-                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
-                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Previsto Receber</p>
-                  <p className="text-xl font-black text-white flex items-center justify-center gap-2">
-                    <Euro size={16} style={{ color: activeTheme.accentColor }} /> 
+                <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1 text-center">
+                  <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Previsão €</p>
+                  <p className="text-base font-black text-white flex items-center justify-center gap-1">
+                    <Euro size={14} style={{ color: activeTheme.accentColor }} /> 
                     {new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(totalPayment)}
                   </p>
                 </div>
-
-                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
+                <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1 text-center">
                   <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Obra Atual</p>
-                  <p className="text-xs font-black text-white/70 truncate flex items-center justify-center gap-2">
+                  <p className="text-xs font-black text-white/80 truncate flex items-center justify-center gap-1">
                     <Briefcase size={12} style={{ color: activeTheme.accentColor }} /> {profile?.current_obra || 'Sem obra'}
                   </p>
                 </div>
-                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-1">
+                <div className="bg-black/30 p-3 rounded-2xl border border-white/5 space-y-1 text-center">
                   <p className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em]">Contacto</p>
-                  <p className="text-xs font-black text-white/70 flex items-center justify-center gap-2">
+                  <p className="text-xs font-black text-white/80 flex items-center justify-center gap-1">
                     <Phone size={12} style={{ color: activeTheme.accentColor }} /> {profile?.phone || 'Privado'}
                   </p>
                 </div>
               </div>
+
+              {/* Discreet & Premium Recent Profile Visitors Card */}
+              <div className="p-3.5 rounded-2xl bg-black/30 border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 backdrop-blur-md transition-all hover:border-white/10">
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                  <div 
+                    className="p-2 rounded-xl flex items-center justify-center text-black font-bold shadow-md flex-shrink-0"
+                    style={{ backgroundColor: activeTheme.accentColor }}
+                  >
+                    <Eye size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-black uppercase tracking-wider text-white/90">
+                        Últimos Visitantes
+                      </p>
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-white/10 text-white/70 border border-white/10">
+                        {recentVisitors.length}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-white/40 font-medium">
+                      Pessoas que visualizaram este perfil recentemente
+                    </p>
+                  </div>
+                </div>
+
+                {/* Overlapping Avatars & Modal Trigger */}
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                  <div 
+                    onClick={() => { triggerLightHaptic(); setShowVisitorsModal(true); }}
+                    className="flex items-center -space-x-2 cursor-pointer hover:scale-105 transition-all p-1 rounded-full bg-black/40 border border-white/10"
+                  >
+                    {recentVisitors.slice(0, 4).map((visitor, idx) => (
+                      <div 
+                        key={visitor.id || idx}
+                        className="relative group"
+                        title={`${visitor.full_name} (${visitor.role || 'Visitante'})`}
+                      >
+                        <div className="w-7 h-7 rounded-full border-2 border-slate-900 overflow-hidden bg-slate-800 flex items-center justify-center text-[9px] font-black text-white/80">
+                          {visitor.avatar_url ? (
+                            <img src={visitor.avatar_url} className="w-full h-full object-cover" />
+                          ) : (
+                            visitor.full_name?.charAt(0).toUpperCase() || 'U'
+                          )}
+                        </div>
+                        {idx === 0 && (
+                          <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 border border-slate-900 rounded-full" />
+                        )}
+                      </div>
+                    ))}
+                    {recentVisitors.length > 4 && (
+                      <div className="w-7 h-7 rounded-full border-2 border-slate-900 bg-white/10 text-white/80 flex items-center justify-center text-[9px] font-black">
+                        +{recentVisitors.length - 4}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => { triggerLightHaptic(); setShowVisitorsModal(true); }}
+                    className="text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/80 transition-all flex items-center gap-1 active:scale-95"
+                  >
+                    Ver Todos <ChevronRight size={12} />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Work Timeline / Calendar View */}
-            <div className="space-y-6">
-              {/* Header do Histórico Mensal e Ação de Exportação JPG */}
-              <div className="space-y-3 px-1">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-xs font-black uppercase tracking-[0.25em] text-white/50 flex items-center gap-2">
-                    <CalendarIcon size={14} style={{ color: activeTheme.accentColor }} /> Histórico Mensal
+            {/* Profile Navigation Tabs (Publicações / Guardados / Ponto) */}
+            <div className="flex border-b border-white/10">
+              <button 
+                onClick={() => { triggerLightHaptic(); setActiveTab('gallery'); }}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-all ${
+                  activeTab === 'gallery'
+                    ? 'border-current opacity-100 text-current'
+                    : 'border-transparent text-white/40 hover:text-white/70'
+                }`}
+                style={activeTab === 'gallery' ? { borderColor: activeTheme.accentColor, color: activeTheme.accentColor } : undefined}
+              >
+                <Grid size={16} /> Publicações
+              </button>
+
+              <button 
+                onClick={() => { triggerLightHaptic(); setActiveTab('saved'); }}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-all ${
+                  activeTab === 'saved'
+                    ? 'border-current opacity-100 text-current'
+                    : 'border-transparent text-white/40 hover:text-white/70'
+                }`}
+                style={activeTab === 'saved' ? { borderColor: activeTheme.accentColor, color: activeTheme.accentColor } : undefined}
+              >
+                <Bookmark size={16} /> Guardados ({savedPosts.length})
+              </button>
+
+              <button 
+                onClick={() => { triggerLightHaptic(); setActiveTab('entries'); }}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border-b-2 transition-all ${
+                  activeTab === 'entries'
+                    ? 'border-current opacity-100 text-current'
+                    : 'border-transparent text-white/40 hover:text-white/70'
+                }`}
+                style={activeTab === 'entries' ? { borderColor: activeTheme.accentColor, color: activeTheme.accentColor } : undefined}
+              >
+                <CalendarIcon size={16} /> Folha de Ponto
+              </button>
+            </div>
+
+            {/* Tab 1: Instagram-Style 3x3 Photo Grid & Publishing */}
+            {activeTab === 'gallery' && (
+              <div className="space-y-4">
+                {/* Header Action: Add New Photo */}
+                <div className="flex items-center justify-between px-1">
+                  <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white/50 flex items-center gap-2">
+                    <Sparkles size={14} style={{ color: activeTheme.accentColor }} /> Galeria de Fotos ({posts.length})
                   </h4>
-                  
-                  {/* Botão de Ação JPG Superior */}
+
                   <button 
-                    onClick={generateJPG}
-                    disabled={exporting}
-                    className="flex items-center gap-2 px-3.5 py-2 text-black rounded-xl text-[10px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-50 flex-shrink-0"
-                    style={{ backgroundColor: activeTheme.accentColor }}
-                    title="Baixar folha de ponto do mês em formato JPG"
+                    onClick={() => { triggerLightHaptic(); setIsNewPostOpen(true); }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 ${activeTheme.primaryBtnClass}`}
                   >
-                    <Download size={14} className="stroke-[2.5]" />
-                    <span>{exporting ? 'Gerando...' : 'Folha JPG'}</span>
+                    <Plus size={16} /> Publicar Foto
                   </button>
                 </div>
-                
-                {/* Navegador de Mês */}
-                <div className="flex items-center justify-between rounded-2xl border p-1.5 shadow-inner" style={{ backgroundColor: activeTheme.styles.card, borderColor: activeTheme.styles.border }}>
-                  <button 
-                    onClick={() => setViewDate(subMonths(viewDate, 1))} 
-                    className="p-2.5 hover:bg-white/10 rounded-xl transition-all"
-                    style={{ color: activeTheme.accentColor }}
-                    title="Mês anterior"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <span className="text-xs font-black uppercase tracking-wider text-center" style={{ color: activeTheme.styles.text }}>
-                    {format(viewDate, 'MMMM yyyy', { locale: ptBR })}
-                  </span>
-                  <button 
-                    onClick={() => setViewDate(addMonths(viewDate, 1))} 
-                    className="p-2.5 hover:bg-white/10 rounded-xl transition-all"
-                    style={{ color: activeTheme.accentColor }}
-                    title="Próximo mês"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              </div>
 
-              {/* Grid Calendar Mini */}
-              <div className="border rounded-3xl p-6" style={{ backgroundColor: `${activeTheme.styles.card}80`, borderColor: activeTheme.styles.border }}>
-                <div className="grid grid-cols-7 gap-2 mb-4">
-                  {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-                    <span key={d} className="text-[8px] font-black uppercase text-center opacity-40">{d}</span>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7 gap-2">
-                  {/* Empty cells for padding */}
-                  {Array.from({ length: getDay(startOfMonth(viewDate)) }).map((_, i) => (
-                    <div key={`empty-${i}`} className="aspect-square" />
-                  ))}
-                  {days.map((day) => {
-                    const entry = entries.find(e => e.day === day.getDate());
-                    return (
-                      <button 
-                        key={day.toISOString()}
-                        onClick={() => handleDayClick(day.getDate(), entry)}
-                        className={`aspect-square rounded-lg flex flex-col items-center justify-center relative border transition-all active:scale-95 ${
-                          entry 
-                            ? (entry.is_absence ? 'bg-red-500/20 border-red-500/50' : '') 
-                            : 'bg-black/20 border-white/5 hover:border-white/20'
-                        }`}
-                        style={entry && !entry.is_absence ? {
-                          backgroundColor: `${activeTheme.accentColor}25`,
-                          borderColor: `${activeTheme.accentColor}70`
-                        } : undefined}
-                      >
-                        <span className={`text-[10px] font-black ${entry ? 'text-current' : 'opacity-30'}`}>{day.getDate()}</span>
-                        {entry && (
-                          <span 
-                            className={`text-[6px] font-black mt-0.5 ${entry.is_absence ? 'text-red-500' : ''}`}
-                            style={!entry.is_absence ? { color: activeTheme.accentColor } : undefined}
-                          >
-                            {entry.is_absence ? 'FALTA' : `${entry.hours}h`}
-                          </span>
-                        )}
-                        {isSameDay(day, new Date()) && (
-                          <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full border-2 border-black shadow-lg" style={{ backgroundColor: activeTheme.accentColor }} />
-                        )}
-                        {entry?.sync_status === 'pending_sync' && (
-                          <div className="absolute -top-1 -left-1 w-2 h-2 bg-amber-400 rounded-full border border-black shadow-lg animate-pulse" title="Pendente de sincronização" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Botão em destaque para gerar Folha de Ponto JPG */}
-                <button 
-                  onClick={generateJPG}
-                  disabled={exporting}
-                  className={`w-full mt-6 py-3.5 px-4 font-black rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all shadow-xl active:scale-98 disabled:opacity-50 ${activeTheme.primaryBtnClass}`}
-                >
-                  <Download size={16} className="stroke-[2.5]" />
-                  <span>{exporting ? 'A Gerar Folha...' : 'Baixar Folha de Ponto Mensal (JPG)'}</span>
-                </button>
-              </div>
-
-              {/* Edit Day Modal */}
-              <AnimatePresence>
-                {selectedDayEntry && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
-                    onClick={() => setSelectedDayEntry(null)}
-                  >
+                {/* 3x3 Grid Layout */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {posts.map((post) => (
                     <motion.div
-                      initial={{ scale: 0.9, y: 20 }}
-                      animate={{ scale: 1, y: 0 }}
-                      exit={{ scale: 0.9, y: 20 }}
-                      className="w-full max-w-sm bg-[#1c2431] border border-white/10 rounded-[2.5rem] p-8 space-y-6 shadow-2xl"
-                      onClick={(e) => e.stopPropagation()}
+                      key={post.id}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => { triggerLightHaptic(); setSelectedPost(post); }}
+                      className="aspect-square rounded-2xl overflow-hidden relative group cursor-pointer border border-white/10 bg-black/40 shadow-lg"
                     >
-                      <div className="flex justify-between items-center">
-                        <div className="space-y-1">
-                          <h3 className="text-xl font-black text-white uppercase tracking-tighter">Editar Dia {selectedDayEntry.day}</h3>
-                          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{format(viewDate, 'MMMM yyyy', { locale: ptBR })}</p>
-                        </div>
-                        <button onClick={() => setSelectedDayEntry(null)} className="p-2 text-white/20 hover:text-white transition-colors"><X size={24} /></button>
-                      </div>
+                      <img 
+                        src={post.image_url} 
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
+                        alt="Publicação" 
+                      />
 
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-4 bg-[#0a0e17] p-4 rounded-2xl border border-white/5">
-                          <div className="flex-1">
-                            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Registrar Falta?</p>
-                            <p className="text-[8px] font-bold text-white/20 uppercase tracking-tighter">O dia será marcado como ausente</p>
-                          </div>
-                          <button 
-                            onClick={() => setEditIsAbsence(!editIsAbsence)}
-                            className={`w-12 h-6 rounded-full transition-all relative ${editIsAbsence ? 'bg-red-500' : 'bg-white/10'}`}
-                          >
-                            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${editIsAbsence ? 'left-7' : 'left-1'}`} />
-                          </button>
-                        </div>
-
-                        {!editIsAbsence ? (
-                          <>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Horas Trabalhadas</label>
-                              <div className="relative">
-                                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#d4af37]" size={16} />
-                                <input 
-                                  type="text" 
-                                  value={editHours} 
-                                  onChange={(e) => setEditHours(e.target.value)}
-                                  className="w-full bg-[#0a0e17] border-none rounded-2xl p-4 pl-12 text-sm font-black text-white outline-none focus:ring-2 focus:ring-[#d4af37]/20"
-                                  placeholder="Ex: 8"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Nome da Obra</label>
-                              <div className="relative">
-                                <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-[#d4af37]" size={16} />
-                                <input 
-                                  type="text" 
-                                  value={editObra} 
-                                  onChange={(e) => setEditObra(e.target.value)}
-                                  className="w-full bg-[#0a0e17] border-none rounded-2xl p-4 pl-12 text-sm font-black text-white outline-none focus:ring-2 focus:ring-[#d4af37]/20 uppercase"
-                                  placeholder="Nome da Obra"
-                                />
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Motivo da Falta</label>
-                            <textarea 
-                              value={editAbsenceReason} 
-                              onChange={(e) => setEditAbsenceReason(e.target.value)}
-                              className="w-full bg-[#0a0e17] border-none rounded-2xl p-4 text-sm font-bold text-white outline-none focus:ring-2 focus:ring-red-500/20 min-h-[100px] resize-none"
-                              placeholder="Descreva o motivo (Ex: Doença, Assuntos Pessoais...)"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex gap-3 pt-4">
-                        {selectedDayEntry.entry && (
-                          <button 
-                            onClick={deleteEntry}
-                            className="flex-1 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white py-4 rounded-2xl transition-all flex items-center justify-center"
-                            title="Excluir"
-                          >
-                            <Trash2 size={20} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={saveEntryEdit}
-                          disabled={savingEdit}
-                          className="flex-[3] bg-[#d4af37] hover:bg-[#b8962d] text-black py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#d4af37]/20"
-                        >
-                          <Save size={18} /> {savingEdit ? 'Salvando...' : 'Salvar'}
-                        </button>
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="space-y-3">
-                {entries.map((entry, entryIdx) => (
-                  <motion.div
-                    key={entry.id ? `profile-entry-${entry.id}-${entryIdx}` : `profile-entry-idx-${entryIdx}`}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className={`group border rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer ${entry.is_absence ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-[#1c2431]/40 border-white/5 hover:bg-[#1c2431]/60'}`}
-                    onClick={() => handleDayClick(entry.day, entry)}
-                  >
-                    <div className="flex items-center gap-5">
-                      <div className={`w-12 h-12 rounded-xl border flex flex-col items-center justify-center ${entry.is_absence ? 'bg-red-500/20 border-red-500/30' : 'bg-[#0a0e17] border-white/5'}`}>
-                        <span className="text-sm font-black text-white">{entry.day.toString().padStart(2, '0')}</span>
-                        <span className={`text-[7px] font-black uppercase tracking-tighter ${entry.is_absence ? 'text-red-400' : 'text-[#d4af37]'}`}>
-                          {format(new Date(entry.year, entry.month, entry.day), 'EEE', { locale: ptBR })}
+                      {/* Hover Overlay with Likes & Comments */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white font-black text-xs">
+                        <span className="flex items-center gap-1">
+                          <Heart size={16} className="fill-white text-white" /> {post.likes_count}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MessageCircle size={16} className="fill-white text-white" /> {post.comments_count}
                         </span>
                       </div>
-                      <div className="space-y-1">
-                        <p className={`text-[10px] font-black uppercase tracking-widest ${entry.is_absence ? 'text-red-500' : 'text-white'}`}>
-                          {entry.is_absence ? 'FALTA REGISTRADA' : entry.obra}
-                        </p>
-                        <p className="text-[8px] font-bold text-white/20 uppercase tracking-widest flex items-center gap-1">
-                          {entry.is_absence ? (
-                            <>Motivo: {entry.absence_reason || 'Não informado'}</>
-                          ) : (
-                            <><MapPin size={8} /> Local Registrado • {profile?.location_city || 'GPS'}</>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div className="space-y-0.5">
-                        <p className={`text-xl font-black tracking-tighter ${entry.is_absence ? 'text-red-500' : 'text-[#d4af37]'}`}>
-                          {entry.is_absence ? '0h' : `${entry.hours}h`}
-                        </p>
-                        <p className="text-[7px] font-black text-white/20 uppercase tracking-widest">
-                          {entry.is_absence ? 'AUSÊNCIA' : 'Carga Diária'}
-                        </p>
-                      </div>
-                      <ChevronRight size={16} className={`text-white/10 transition-colors ${entry.is_absence ? 'group-hover:text-red-500' : 'group-hover:text-[#d4af37]'}`} />
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  ))}
+                </div>
 
-                {entries.length === 0 && (
-                  <div className="py-20 text-center rounded-[2rem] border border-dashed border-white/5 bg-white/[0.02]">
-                    <p className="text-[10px] font-black text-white/10 uppercase tracking-[0.4em]">Sem registros este mês</p>
+                {posts.length === 0 && (
+                  <div className="py-16 text-center rounded-[2rem] border border-dashed border-white/10 bg-black/20 space-y-3">
+                    <Camera size={36} className="mx-auto text-white/20" />
+                    <p className="text-xs font-black uppercase tracking-widest text-white/40">Nenhuma fotografia publicada</p>
+                    <button 
+                      onClick={() => setIsNewPostOpen(true)}
+                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-white hover:bg-white/20"
+                    >
+                      Publicar Primeira Foto
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
+            )}
+
+            {/* Tab 2: Saved / Bookmarked Photos */}
+            {activeTab === 'saved' && (
+              <div className="space-y-4">
+                <div className="px-1">
+                  <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white/50 flex items-center gap-2">
+                    <Bookmark size={14} style={{ color: activeTheme.accentColor }} /> Destaques e Fotos Guardadas
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {savedPosts.map((post) => (
+                    <motion.div
+                      key={`saved-${post.id}`}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => { triggerLightHaptic(); setSelectedPost(post); }}
+                      className="aspect-square rounded-2xl overflow-hidden relative group cursor-pointer border border-white/10 bg-black/40 shadow-lg"
+                    >
+                      <img src={post.image_url} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" />
+                      <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-amber-400">
+                        <Bookmark size={12} className="fill-amber-400" />
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {savedPosts.length === 0 && (
+                  <div className="py-16 text-center rounded-[2rem] border border-dashed border-white/10 bg-black/20 space-y-2">
+                    <Bookmark size={36} className="mx-auto text-white/20" />
+                    <p className="text-xs font-black uppercase tracking-widest text-white/40">Nenhuma publicação guardada</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 3: Time Entry Calendar & Work Hours */}
+            {activeTab === 'entries' && (
+              <div className="space-y-6">
+                <div className="space-y-3 px-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-black uppercase tracking-[0.25em] text-white/50 flex items-center gap-2">
+                      <CalendarIcon size={14} style={{ color: activeTheme.accentColor }} /> Histórico Mensal de Ponto
+                    </h4>
+                    
+                    <button 
+                      onClick={generateJPG}
+                      disabled={exporting}
+                      className={`flex items-center gap-2 px-3.5 py-2 text-black rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-lg disabled:opacity-50 flex-shrink-0 ${activeTheme.primaryBtnClass}`}
+                      title="Baixar folha de ponto em JPG"
+                    >
+                      <Download size={14} className="stroke-[2.5]" />
+                      <span>{exporting ? 'A Gerar...' : 'Folha JPG'}</span>
+                    </button>
+                  </div>
+                  
+                  {/* Month Switcher */}
+                  <div className="flex items-center justify-between rounded-2xl border p-1.5 shadow-inner" style={{ backgroundColor: activeTheme.styles.card, borderColor: activeTheme.styles.border }}>
+                    <button 
+                      onClick={() => setViewDate(subMonths(viewDate, 1))} 
+                      className="p-2.5 hover:bg-white/10 rounded-xl transition-all"
+                      style={{ color: activeTheme.accentColor }}
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <span className="text-xs font-black uppercase tracking-wider text-center" style={{ color: activeTheme.styles.text }}>
+                      {format(viewDate, 'MMMM yyyy', { locale: ptBR })}
+                    </span>
+                    <button 
+                      onClick={() => setViewDate(addMonths(viewDate, 1))} 
+                      className="p-2.5 hover:bg-white/10 rounded-xl transition-all"
+                      style={{ color: activeTheme.accentColor }}
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="border rounded-3xl p-6" style={{ backgroundColor: `${activeTheme.styles.card}80`, borderColor: activeTheme.styles.border }}>
+                  <div className="grid grid-cols-7 gap-2 mb-4">
+                    {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
+                      <span key={d} className="text-[8px] font-black uppercase text-center opacity-40">{d}</span>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-2">
+                    {Array.from({ length: getDay(startOfMonth(viewDate)) }).map((_, i) => (
+                      <div key={`empty-${i}`} className="aspect-square" />
+                    ))}
+                    {days.map((day) => {
+                      const entry = entries.find(e => e.day === day.getDate());
+                      return (
+                        <button 
+                          key={day.toISOString()}
+                          onClick={() => handleDayClick(day.getDate(), entry)}
+                          className={`aspect-square rounded-lg flex flex-col items-center justify-center relative border transition-all active:scale-95 ${
+                            entry 
+                              ? (entry.is_absence ? 'bg-red-500/20 border-red-500/50' : '') 
+                              : 'bg-black/20 border-white/5 hover:border-white/20'
+                          }`}
+                          style={entry && !entry.is_absence ? {
+                            backgroundColor: `${activeTheme.accentColor}25`,
+                            borderColor: `${activeTheme.accentColor}70`
+                          } : undefined}
+                        >
+                          <span className={`text-[10px] font-black ${entry ? 'text-current' : 'opacity-30'}`}>{day.getDate()}</span>
+                          {entry && (
+                            <span 
+                              className={`text-[6px] font-black mt-0.5 ${entry.is_absence ? 'text-red-500' : ''}`}
+                              style={!entry.is_absence ? { color: activeTheme.accentColor } : undefined}
+                            >
+                              {entry.is_absence ? 'FALTA' : `${entry.hours}h`}
+                            </span>
+                          )}
+                          {isSameDay(day, new Date()) && (
+                            <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full border-2 border-black shadow-lg" style={{ backgroundColor: activeTheme.accentColor }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Day Entries List */}
+                <div className="space-y-3">
+                  {entries.map((entry, entryIdx) => (
+                    <motion.div
+                      key={entry.id ? `profile-entry-${entry.id}-${entryIdx}` : `profile-entry-idx-${entryIdx}`}
+                      className={`group border rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer ${entry.is_absence ? 'bg-red-500/10 border-red-500/20' : 'bg-[#1c2431]/40 border-white/5'}`}
+                      onClick={() => handleDayClick(entry.day, entry)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-xl border flex flex-col items-center justify-center ${entry.is_absence ? 'bg-red-500/20 border-red-500/30' : 'bg-black/40 border-white/5'}`}>
+                          <span className="text-sm font-black text-white">{entry.day.toString().padStart(2, '0')}</span>
+                        </div>
+                        <div>
+                          <p className={`text-[10px] font-black uppercase tracking-widest ${entry.is_absence ? 'text-red-500' : 'text-white'}`}>
+                            {entry.is_absence ? 'FALTA REGISTRADA' : entry.obra}
+                          </p>
+                          <p className="text-[8px] font-bold text-white/30 uppercase tracking-widest">
+                            {entry.is_absence ? `Motivo: ${entry.absence_reason || 'Não informado'}` : `Carga: ${entry.hours} horas`}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-white/20" />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Logout Button */}
             <button 
               onClick={handleLogout}
-              className="w-full py-6 rounded-[2rem] border border-red-500/10 bg-red-500/5 text-red-500/40 text-[10px] font-black uppercase tracking-[0.4em] hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-3"
+              className="w-full py-5 rounded-[2rem] border border-red-500/10 bg-red-500/5 text-red-500/60 text-[10px] font-black uppercase tracking-[0.4em] hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-3"
             >
               <LogOut size={16} /> Sair do Sistema GSI
             </button>
@@ -636,7 +1265,7 @@ export default function ProfileView({
               isDarkMode={isDarkMode}
               onBack={() => {
                 setShowSettings(false);
-                getProfile(); // Refresh profile after settings change
+                getProfile();
               }}
               onUpdate={(updates) => {
                 setProfile(prev => prev ? { ...prev, ...updates } : null);
@@ -647,7 +1276,431 @@ export default function ProfileView({
         )}
       </AnimatePresence>
 
-      {/* Hidden Report Template for Exporting */}
+      {/* Modal 1: Quick Edit Profile Modal */}
+      <AnimatePresence>
+        {isEditProfileOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setIsEditProfileOpen(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md bg-[#12192e] border border-white/10 rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl text-white"
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+                  <Edit3 size={20} style={{ color: activeTheme.accentColor }} /> Editar Perfil
+                </h3>
+                <button onClick={() => setIsEditProfileOpen(false)} className="p-2 text-white/40 hover:text-white">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Full Name */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Nome Completo</label>
+                  <input 
+                    type="text" 
+                    value={editName} 
+                    onChange={e => setEditName(e.target.value)} 
+                    className="w-full bg-[#080d1a] border border-white/10 rounded-xl p-3 text-xs font-bold outline-none"
+                  />
+                </div>
+
+                {/* Bio with 150 Limit Indicator */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Biografia (Bio)</label>
+                    <span className={`text-[10px] font-mono font-bold ${editBio.length > 140 ? 'text-amber-400' : 'text-white/40'}`}>
+                      {editBio.length}/150
+                    </span>
+                  </div>
+                  <textarea 
+                    maxLength={150}
+                    value={editBio} 
+                    onChange={e => setEditBio(e.target.value)} 
+                    rows={3}
+                    placeholder="Conta algo sobre ti, especialidade ou cargo..."
+                    className="w-full bg-[#080d1a] border border-white/10 rounded-xl p-3 text-xs font-medium outline-none resize-none"
+                  />
+                </div>
+
+                {/* Role and City */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Cargo</label>
+                    <select 
+                      value={editRole} 
+                      onChange={e => setEditRole(e.target.value as any)} 
+                      className="w-full bg-[#080d1a] border border-white/10 rounded-xl p-3 text-xs font-bold outline-none appearance-none"
+                    >
+                      <option value="Ajudante">Ajudante</option>
+                      <option value="Oficial">Oficial</option>
+                      <option value="Motorista">Motorista</option>
+                      <option value="Encarregado">Encarregado</option>
+                      <option value="Mestre de Obra">Mestre de Obra</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Cidade</label>
+                    <input 
+                      type="text" 
+                      value={editCity} 
+                      onChange={e => setEditCity(e.target.value)} 
+                      className="w-full bg-[#080d1a] border border-white/10 rounded-xl p-3 text-xs font-bold outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  onClick={handleSaveQuickProfile}
+                  disabled={savingProfile}
+                  className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 shadow-lg ${activeTheme.primaryBtnClass}`}
+                >
+                  <Save size={16} /> {savingProfile ? 'Guardando...' : 'Guardar Alterações'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal 2: Create New Photo Post Modal */}
+      <AnimatePresence>
+        {isNewPostOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setIsNewPostOpen(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md bg-[#12192e] border border-white/10 rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl text-white"
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+                  <Camera size={20} style={{ color: activeTheme.accentColor }} /> Publicar Nova Fotografia
+                </h3>
+                <button onClick={() => setIsNewPostOpen(false)} className="p-2 text-white/40 hover:text-white">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Photo Select / Preview Area */}
+              <div className="space-y-4">
+                <div className="aspect-square w-full rounded-2xl border-2 border-dashed border-white/20 bg-black/40 overflow-hidden flex flex-col items-center justify-center relative group">
+                  {newPostImage ? (
+                    <img src={newPostImage} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-center p-6 space-y-3">
+                      <Camera size={40} className="mx-auto text-white/20" />
+                      <p className="text-xs font-bold text-white/60">Carrega uma foto da galeria ou câmara</p>
+                      <button 
+                        onClick={() => document.getElementById('new-post-file')?.click()}
+                        className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-black uppercase"
+                      >
+                        Escolher Foto
+                      </button>
+                    </div>
+                  )}
+
+                  <input 
+                    type="file" 
+                    id="new-post-file" 
+                    accept="image/*" 
+                    onChange={handleSelectNewPostPhoto} 
+                    className="hidden" 
+                  />
+                </div>
+
+                {/* Preset Quick Images */}
+                {!newPostImage && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Ou escolhe uma foto de exemplo:</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {[
+                        'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b7?w=800',
+                        'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800',
+                        'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=800',
+                        'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800'
+                      ].map((imgUrl, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => setNewPostImage(imgUrl)}
+                          className="w-14 h-14 rounded-xl border border-white/20 overflow-hidden flex-shrink-0 cursor-pointer hover:scale-105 transition-all"
+                        >
+                          <img src={imgUrl} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Caption Input */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Legenda / Descrição</label>
+                  <textarea 
+                    value={newPostCaption} 
+                    onChange={e => setNewPostCaption(e.target.value)} 
+                    rows={3}
+                    placeholder="Escreve uma legenda para a tua publicação..."
+                    className="w-full bg-[#080d1a] border border-white/10 rounded-xl p-3 text-xs font-medium outline-none resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  onClick={handlePublishPost}
+                  disabled={!newPostImage}
+                  className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 ${activeTheme.primaryBtnClass}`}
+                >
+                  <Send size={16} /> Publicar no Perfil
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal 3: Lightbox Photo Viewer Modal (Likes, Comments & Saved) */}
+      <AnimatePresence>
+        {selectedPost && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-xl"
+            onClick={() => setSelectedPost(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-lg bg-[#0f172a] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl text-white flex flex-col max-h-[90vh]"
+            >
+              {/* Lightbox Header */}
+              <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-white/20 bg-black/60">
+                    <img src={selectedPost.author_avatar || profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider">{selectedPost.author_name}</h4>
+                    <p className="text-[9px] text-white/40 font-mono">
+                      {format(new Date(selectedPost.created_at), 'dd MMM yyyy • HH:mm', { locale: ptBR })}
+                    </p>
+                  </div>
+                </div>
+
+                <button onClick={() => setSelectedPost(null)} className="p-2 text-white/40 hover:text-white">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Photo Display */}
+              <div className="relative bg-black flex items-center justify-center max-h-[380px] overflow-hidden">
+                <img src={selectedPost.image_url} className="w-full max-h-[380px] object-contain" />
+              </div>
+
+              {/* Interaction Bar (Likes, Comment Count, Save) */}
+              <div className="p-4 space-y-3 bg-[#0a0e17] flex-1 overflow-y-auto">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => toggleLikePost(selectedPost.id)}
+                      className="flex items-center gap-1.5 text-xs font-black transition-transform active:scale-125"
+                    >
+                      <Heart 
+                        size={22} 
+                        className={selectedPost.liked_by.includes(userId) ? 'fill-red-500 text-red-500' : 'text-white/60'} 
+                      />
+                      <span>{selectedPost.likes_count} gostos</span>
+                    </button>
+
+                    <span className="flex items-center gap-1.5 text-xs font-black text-white/60">
+                      <MessageCircle size={20} />
+                      <span>{selectedPost.comments_count} comentários</span>
+                    </span>
+                  </div>
+
+                  <button 
+                    onClick={() => toggleSavePost(selectedPost.id)}
+                    className="p-1.5 rounded-full transition-transform active:scale-125"
+                  >
+                    <Bookmark 
+                      size={20} 
+                      className={selectedPost.is_saved ? 'fill-amber-400 text-amber-400' : 'text-white/60'} 
+                    />
+                  </button>
+                </div>
+
+                {/* Caption */}
+                {selectedPost.caption && (
+                  <p className="text-xs text-white/90 leading-relaxed font-medium bg-white/5 p-3 rounded-xl border border-white/5">
+                    <span className="font-black text-white mr-1.5">{selectedPost.author_name}:</span>
+                    {selectedPost.caption}
+                  </p>
+                )}
+
+                {/* Comments List */}
+                <div className="space-y-2 pt-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Comentários</p>
+                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    {selectedPost.comments.map(comm => (
+                      <div key={comm.id} className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-start gap-2.5">
+                        <div className="w-6 h-6 rounded-full overflow-hidden bg-black/60 flex-shrink-0">
+                          {comm.author_avatar ? (
+                            <img src={comm.author_avatar} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[9px] font-black text-white/40">
+                              {comm.author_name.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-white">{comm.author_name}</span>
+                            <span className="text-[8px] text-white/30 font-mono">
+                              {format(new Date(comm.created_at), 'HH:mm', { locale: ptBR })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-white/80 mt-0.5">{comm.content}</p>
+                        </div>
+                      </div>
+                    ))}
+
+                    {selectedPost.comments.length === 0 && (
+                      <p className="text-[10px] text-white/30 italic text-center py-2">Sê o primeiro a comentar!</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Add Comment Input */}
+                <div className="flex gap-2 pt-2">
+                  <input 
+                    type="text" 
+                    value={commentText} 
+                    onChange={e => setCommentText(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleAddComment(selectedPost.id)}
+                    placeholder="Adiciona um comentário..." 
+                    className="flex-1 bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:border-white/30"
+                  />
+                  <button 
+                    onClick={() => handleAddComment(selectedPost.id)}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 ${activeTheme.primaryBtnClass}`}
+                  >
+                    <Send size={14} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Recent Visitors Modal */}
+      <AnimatePresence>
+        {showVisitorsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowVisitorsModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-md border rounded-3xl p-6 space-y-4 shadow-2xl relative ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div 
+                    className="p-2.5 rounded-2xl text-black font-bold shadow-md"
+                    style={{ backgroundColor: activeTheme.accentColor }}
+                  >
+                    <Eye size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black uppercase tracking-wider text-white">
+                      Últimos Visitantes
+                    </h3>
+                    <p className="text-[10px] text-white/40">
+                      Histórico recente de quem acedeu a este perfil
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowVisitorsModal(false)}
+                  className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                {recentVisitors.length === 0 ? (
+                  <div className="text-center py-8 text-white/40 text-xs font-medium">
+                    Nenhuma visita registada recentemente.
+                  </div>
+                ) : (
+                  recentVisitors.map((v, index) => (
+                    <div 
+                      key={v.id || index}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-black/30 border border-white/5 hover:border-white/15 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full border border-white/10 overflow-hidden bg-black/40 flex items-center justify-center text-xs font-black text-white/70">
+                          {v.avatar_url ? (
+                            <img src={v.avatar_url} className="w-full h-full object-cover" />
+                          ) : (
+                            v.full_name?.charAt(0).toUpperCase() || 'U'
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-white">{v.full_name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span 
+                              className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full text-black"
+                              style={{ backgroundColor: activeTheme.accentColor }}
+                            >
+                              {v.role || 'Colaborador'}
+                            </span>
+                            <span className="text-[9px] text-white/40 font-mono">
+                              {formatVisitTime(v.visited_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hidden Report Template for Exporting JPG */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
         <div ref={reportRef}>
           {profile && (

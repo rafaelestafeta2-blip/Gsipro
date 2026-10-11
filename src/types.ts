@@ -1,3 +1,11 @@
+export interface ProfileVisitor {
+  id: string;
+  full_name: string;
+  avatar_url?: string;
+  role?: string;
+  visited_at: string;
+}
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -7,6 +15,13 @@ export interface Profile {
   current_obra?: string;
   location_city?: string;
   phone?: string;
+  bio?: string;
+  followers_count?: number;
+  following_count?: number;
+  posts_count?: number;
+  gallery_posts?: ProfileGalleryPost[];
+  recent_visitors?: ProfileVisitor[];
+  is_following?: boolean;
   is_admin?: boolean;
   notification_hour?: number;
   notification_days?: number[]; // 0 for Sunday, 1-6 for Mon-Sat
@@ -47,12 +62,28 @@ export interface LocationData {
   name?: string;
 }
 
+export interface WeatherData {
+  city: string;
+  region?: string;
+  country?: string;
+  temp: number;
+  feels_like: number;
+  condition: string;
+  weather_code: number;
+  icon: string;
+  humidity: number;
+  wind_speed: number;
+  is_day: boolean;
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface ReplyInfo {
   id: string;
   content: string;
   sender_name?: string;
   sender_id?: string;
-  type?: 'text' | 'image' | 'audio' | 'call_log' | 'location' | 'poll';
+  type?: 'text' | 'image' | 'audio' | 'call_log' | 'location' | 'poll' | 'sticker' | 'weather';
   media_url?: string;
 }
 
@@ -64,8 +95,15 @@ export interface Message {
   created_at: string;
   sender_name?: string;
   sender_avatar?: string;
-  type?: 'text' | 'image' | 'audio' | 'call_log' | 'location' | 'poll';
+  type?: 'text' | 'image' | 'audio' | 'call_log' | 'location' | 'poll' | 'sticker' | 'weather';
   media_url?: string;
+  sticker_info?: {
+    id: string;
+    url: string;
+    title: string;
+    category: string;
+    emoji: string;
+  };
   is_view_once?: boolean;
   view_once_opened?: boolean;
   opened_by?: string[];
@@ -73,6 +111,7 @@ export interface Message {
   deleted_for?: string[];
   poll?: PollData;
   location?: LocationData;
+  weather?: WeatherData;
   call_info?: {
     type: 'video' | 'audio';
     status: 'missed' | 'declined' | 'completed' | 'cancelled';
@@ -115,8 +154,15 @@ export interface GroupMessage {
   group_id: string;
   sender_id: string;
   content: string;
-  type: 'text' | 'image' | 'audio' | 'location' | 'poll';
+  type: 'text' | 'image' | 'audio' | 'location' | 'poll' | 'sticker' | 'weather';
   media_url?: string;
+  sticker_info?: {
+    id: string;
+    url: string;
+    title: string;
+    category: string;
+    emoji: string;
+  };
   is_view_once?: boolean;
   view_once_opened?: boolean;
   opened_by?: string[];
@@ -124,6 +170,7 @@ export interface GroupMessage {
   deleted_for?: string[];
   poll?: PollData;
   location?: LocationData;
+  weather?: WeatherData;
   created_at: string;
   sender_name?: string;
   sender_avatar?: string;
@@ -177,4 +224,28 @@ export interface TimeEntry {
   created_at?: string;
   user_id: string;
   sync_status?: 'synced' | 'pending_sync';
+}
+
+export interface ProfileGalleryComment {
+  id: string;
+  user_id: string;
+  author_name: string;
+  author_avatar?: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ProfileGalleryPost {
+  id: string;
+  user_id: string;
+  author_name: string;
+  author_avatar?: string;
+  image_url: string;
+  caption?: string;
+  created_at: string;
+  likes_count: number;
+  liked_by: string[]; // user_ids
+  comments_count: number;
+  comments: ProfileGalleryComment[];
+  is_saved?: boolean;
 }
