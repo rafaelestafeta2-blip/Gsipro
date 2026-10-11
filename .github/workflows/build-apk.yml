@@ -47,48 +47,7 @@ jobs:
           elif [ -f "android/app/google-services.json" ]; then
             echo "✅ google-services.json já existe em android/app/"
           else
-            echo "⚠️ Criando google-services.json no workflow a partir das credenciais do Firebase..."
-            cat << 'EOF' > android/app/google-services.json
-{
-  "project_info": {
-    "project_number": "363493350499",
-    "project_id": "gen-lang-client-0974852104",
-    "storage_bucket": "gen-lang-client-0974852104.firebasestorage.app"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:363493350499:android:3594a548b5c2098911ac56",
-        "android_client_info": {
-          "package_name": "com.gsipro.app"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "363493350499-ens7nomrcs1qoc4va3qg5245kaek05sk.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAdhMGwnN-fwFjdCG9swq9QS3Fcc-VaxJQ"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "363493350499-ens7nomrcs1qoc4va3qg5245kaek05sk.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
-}
-EOF
+            echo "ewogICJwcm9qZWN0X2luZm8iOiB7CiAgICAicHJvamVjdF9udW1iZXIiOiAiMzYzNDkzMzUwNDk5IiwKICAgICJwcm9qZWN0X2lkIjogImdlbi1sYW5nLWNsaWVudC0wOTc0ODUyMTA0IiwKICAgICJzdG9yYWdlX2J1Y2tldCI6ICJnZW4tbGFuZy1jbGllbnQtMDk3NDg1MjEwNC5maXJlYmFzZXN0b3JhZ2UuYXBwIgogIH0sCiAgImNsaWVudCI6IFsKICAgIHsKICAgICAgImNsaWVudF9pbmZvIjogewogICAgICAgICJtb2JpbGVzZGtfYXBwX2lkIjogIjE6MzYzNDkzMzUwNDk5OmFuZHJvaWQ6MzU5NGE1NDhiNWMyMDk4OTExYWM1NiIsCiAgICAgICAgImFuZHJvaWRfY2xpZW50X2luZm8iOiB7CiAgICAgICAgICAicGFja2FnZV9uYW1lIjogImNvbS5nc2lwcm8uYXBwIgogICAgICAgIH0KICAgICAgfSwKICAgICAgIm9hdXRoX2NsaWVudCI6IFsKICAgICAgICB7CiAgICAgICAgICAiY2xpZW50X2lkIjogIjM2MzQ5MzM1MDQ5OS1lbnM3bm9tcmNzMXFvYzR2YTNxZzUyNDVrYWVrMDVzay5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsCiAgICAgICAgICAiY2xpZW50X3R5cGUiOiAzCiAgICAgICAgfQogICAgICBdLAogICAgICAiYXBpX2tleSI6IFsKICAgICAgICB7CiAgICAgICAgICAiY3VycmVudF9rZXkiOiAiQUl6YVN5QWRoTUd3bk4tZndGamRDRzlzd3E5UVMzRmNjLVZheEpRIgogICAgICAgIH0KICAgICAgXSwKICAgICAgInNlcnZpY2VzIjogewogICAgICAgICJhcHBpbnZpdGVfc2VydmljZSI6IHsKICAgICAgICAgICJvdGhlcl9wbGF0Zm9ybV9vYXV0aF9jbGllbnQiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAiY2xpZW50X2lkIjogIjM2MzQ5MzM1MDQ5OS1lbnM3bm9tcmNzMXFvYzR2YTNxZzUyNDVrYWVrMDVzay5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsCiAgICAgICAgICAgICAgImNsaWVudF90eXBlIjogMwogICAgICAgICAgICB9CiAgICAgICAgICBdCiAgICAgICAgfQogICAgICB9CiAgICB9CiAgXSwKICAiY29uZmlndXJhdGlvbl92ZXJzaW9uIjogIjEiCn0=" | base64 -d > android/app/google-services.json
             echo "✅ google-services.json gerado com sucesso!"
           fi
 
