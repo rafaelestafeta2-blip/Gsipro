@@ -10,8 +10,7 @@ const densities = [
   { dir: 'mipmap-hdpi', size: 72 },
   { dir: 'mipmap-xhdpi', size: 96 },
   { dir: 'mipmap-xxhdpi', size: 144 },
-  { dir: 'mipmap-xxxhdpi', size: 192 },
-  { dir: 'mipmap-512', size: 512 }
+  { dir: 'mipmap-xxxhdpi', size: 192 }
 ];
 
 async function generate() {
