@@ -11,6 +11,7 @@ export interface Profile {
   full_name: string;
   role: 'Ajudante' | 'Oficial' | 'Motorista' | 'Encarregado' | 'Mestre de Obra';
   avatar_url?: string;
+  banner_url?: string;
   hourly_rate: number;
   current_obra?: string;
   location_city?: string;

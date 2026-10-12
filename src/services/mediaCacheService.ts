@@ -264,9 +264,84 @@ export async function compressImageFile(file: File, maxDimension: number = 1280,
  * Faz download do arquivo de mídia para a galeria / downloads do dispositivo do usuário
  */
 export async function downloadMediaFile(url: string, suggestedFilename?: string): Promise<boolean> {
+  return downloadMediaFileWithWatermark(url, suggestedFilename);
+}
+
+/**
+ * Faz download do arquivo de mídia com a marca d'água InstaChat embutida na imagem
+ */
+export async function downloadMediaFileWithWatermark(url: string, suggestedFilename?: string, authorName?: string): Promise<boolean> {
   try {
     const cachedUrl = await getCachedMediaUrl(url);
-    const filename = suggestedFilename || `GSI_PRO_FOTO_${Date.now()}.jpg`;
+    const filename = suggestedFilename || `INSTACHAT_${Date.now()}.jpg`;
+
+    if (url && (url.match(/\.(jpeg|jpg|png|webp)(\?.*)?$/i) || url.startsWith('data:image'))) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = cachedUrl;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width || 1080;
+      canvas.height = img.naturalHeight || img.height || 1080;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+
+        // Watermark badge at bottom-right
+        const padding = Math.max(20, Math.round(canvas.width * 0.03));
+        const badgeWidth = Math.round(canvas.width * 0.28);
+        const badgeHeight = Math.round(canvas.height * 0.07);
+        const x = canvas.width - badgeWidth - padding;
+        const y = canvas.height - badgeHeight - padding;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(x, y, badgeWidth, badgeHeight, badgeHeight / 2);
+        } else {
+          ctx.rect(x, y, badgeWidth, badgeHeight);
+        }
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.stroke();
+
+        // Circle icon
+        const circleRadius = badgeHeight * 0.35;
+        const circleX = x + badgeHeight / 2;
+        const circleY = y + badgeHeight / 2;
+        ctx.fillStyle = '#06b6d4';
+        ctx.beginPath();
+        ctx.arc(circleX, circleY, circleRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.round(badgeHeight * 0.38)}px sans-serif`;
+        ctx.fillText('INSTA CHAT', x + badgeHeight + 4, y + badgeHeight * 0.58);
+        
+        if (authorName) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.font = `${Math.round(badgeHeight * 0.3)}px sans-serif`;
+          ctx.fillText(`@${authorName.toLowerCase().replace(/\\s+/g, '')}`, x + badgeHeight + 4, y + badgeHeight * 0.85);
+        }
+        ctx.restore();
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.96);
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return true;
+      }
+    }
 
     const a = document.createElement('a');
     a.href = cachedUrl;
@@ -279,7 +354,17 @@ export async function downloadMediaFile(url: string, suggestedFilename?: string)
     }, 120);
     return true;
   } catch (err) {
-    console.error('[Download Media Error]:', err);
-    return false;
+    console.error('[Download Watermark Error]:', err);
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedFilename || 'INSTACHAT_DOWNLOAD.jpg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

@@ -11,7 +11,7 @@ import {
 import { InstaChatIcon } from './InstaChatLogo';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { downloadMediaFile, getCachedMediaSync, getCachedMediaUrl } from '../services/mediaCacheService';
+import { downloadMediaFile, downloadMediaFileWithWatermark, getCachedMediaSync, getCachedMediaUrl } from '../services/mediaCacheService';
 import { triggerLightHaptic, triggerSuccessHaptic } from '../lib/haptics';
 
 interface MediaLightboxModalProps {
@@ -96,7 +96,7 @@ export default function MediaLightboxModal({
   const handleDownload = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     triggerLightHaptic();
-    const success = await downloadMediaFile(mediaUrl, `GSI_PRO_CHAT_${Date.now()}.jpg`);
+    const success = await downloadMediaFileWithWatermark(mediaUrl, `INSTACHAT_${Date.now()}.jpg`, senderName || 'instachat');
     if (success) {
       triggerSuccessHaptic();
       setIsDownloaded(true);

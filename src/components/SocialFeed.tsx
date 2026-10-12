@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { SocialPost, SocialComment, Profile } from '../types';
+import { InstaChatIcon } from './InstaChatLogo';
 import { 
   Heart, 
   MessageCircle, 
@@ -762,15 +763,23 @@ export default function SocialFeed({
 
                 {/* Media Attachment */}
                 {post.media_url && (
-                  <div className="rounded-3xl overflow-hidden border border-white/10 bg-[#0a0e17]/80 flex items-center justify-center w-full">
+                  <div className="rounded-3xl overflow-hidden border border-white/10 bg-[#0a0e17]/80 flex items-center justify-center w-full relative">
                     {post.media_type === 'image' && (
-                      <div className="w-full max-h-[480px] rounded-2xl overflow-hidden bg-[#0a0e17] flex items-center justify-center">
+                      <div className="w-full max-h-[480px] rounded-2xl overflow-hidden bg-[#0a0e17] flex items-center justify-center relative">
                         <img 
                           src={post.media_url} 
                           loading="lazy"
                           onClick={() => setActiveImageZoom(post.media_url!)}
                           className="w-full max-h-[480px] object-cover rounded-2xl cursor-pointer hover:scale-[1.01] transition-transform" 
                         />
+                        {/* InstaChat Premium Watermark (Identical to Profile) */}
+                        <div className="absolute bottom-3 right-3 z-20 bg-black/65 backdrop-blur-md border border-white/15 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xl pointer-events-none">
+                          <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-500 flex items-center justify-center shadow-md p-0.5">
+                            <InstaChatIcon size={12} />
+                          </div>
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">INSTA CHAT</span>
+                          <span className="text-[8px] font-medium text-white/75">@{post.author_name ? post.author_name.toLowerCase().replace(/\s+/g, '') : 'instachat'}</span>
+                        </div>
                       </div>
                     )}
                     {post.media_type === 'video' && (

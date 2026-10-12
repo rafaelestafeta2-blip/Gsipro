@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { SocialPost, SocialComment } from '../types';
+import { InstaChatIcon } from './InstaChatLogo';
 import { 
   Film, 
   Heart, 
@@ -15,7 +16,8 @@ import {
   Pause,
   Share2,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Camera
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
@@ -376,6 +378,15 @@ export default function ReelsView({
               >
                 {/* Media Container */}
                 <div className="w-full h-full relative flex items-center justify-center">
+                  {/* InstaChat Premium Watermark (Identical to Profile) */}
+                  <div className="absolute bottom-20 right-4 z-30 bg-black/65 backdrop-blur-md border border-white/15 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 shadow-2xl pointer-events-none">
+                    <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-500 flex items-center justify-center shadow-md p-0.5">
+                      <InstaChatIcon size={12} />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">INSTA CHAT</span>
+                    <span className="text-[8px] font-medium text-white/75">@{post.author_name ? post.author_name.toLowerCase().replace(/\s+/g, '') : 'instachat'}</span>
+                  </div>
+
                   {isYouTubeUrl(post.media_url) ? (
                     <iframe 
                       src={formatYouTubeEmbedUrl(post.media_url!, isActive)} 

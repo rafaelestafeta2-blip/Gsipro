@@ -7,10 +7,11 @@ import {
   Loader2, Calendar as CalendarIcon, MapPin, ChevronRight, Home as HomeIcon, Download, 
   ChevronLeft, X, Clock, Trash2, Palette, Heart, MessageCircle, Bookmark, Plus, 
   Grid, Edit3, Share2, Send, FileText, Sparkles, Check, Users, UserCheck, ShieldCheck,
-  Eye
+  Eye, ZoomIn
 } from 'lucide-react';
 import SettingsView from './SettingsView';
 import ReportTemplate from './ReportTemplate';
+import MediaLightboxModal from './MediaLightboxModal';
 import { InstaChatIcon } from './InstaChatLogo';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -188,6 +189,7 @@ export default function ProfileView({
   
   // Lightbox Comments
   const [commentText, setCommentText] = useState('');
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   // Time Entries Editing
   const [selectedDayEntry, setSelectedDayEntry] = useState<{ day: number, entry?: TimeEntry } | null>(null);
@@ -275,15 +277,20 @@ export default function ProfileView({
       const storedPosts = localStorage.getItem(`instachat_posts_${userId}`);
       if (storedPosts) {
         const parsed = JSON.parse(storedPosts);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setPosts(parsed);
           return;
         }
       }
-      setPosts(INITIAL_SAMPLE_POSTS);
-      localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify(INITIAL_SAMPLE_POSTS));
+      if (userId === currentUserId) {
+        setPosts(INITIAL_SAMPLE_POSTS);
+        localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify(INITIAL_SAMPLE_POSTS));
+      } else {
+        setPosts([]);
+        localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify([]));
+      }
     } catch {
-      setPosts(INITIAL_SAMPLE_POSTS);
+      setPosts(userId === currentUserId ? INITIAL_SAMPLE_POSTS : []);
     }
   };
 
@@ -787,8 +794,47 @@ export default function ProfileView({
               )}
             </div>
 
-            {/* Main Instagram-Style Profile Card */}
-            <div className={`border rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}>
+            {/* Main Instagram-Style Profile Card with Cover Photo Banner */}
+            <div className={`border rounded-[2.5rem] overflow-hidden shadow-2xl relative transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}>
+              
+              {/* Cover Photo Banner with Gradient Fade (Degradê ao Fundo) */}
+              <div className="relative w-full h-40 sm:h-52 bg-slate-900 overflow-hidden group">
+                {profile?.banner_url ? (
+                  <img src={profile.banner_url} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-r from-cyan-900/40 via-blue-900/30 to-purple-900/40 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/10 via-transparent to-black/60"></div>
+                  </div>
+                )}
+
+                {/* Gradient Fade into card background (No hard borders) */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e17] via-[#0a0e17]/50 to-transparent"></div>
+
+                {/* Edit Banner Button (Only for own profile) */}
+                {currentUserId === userId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newBanner = prompt('Insira o link da nova capa de fundo (banner):', profile?.banner_url || '');
+                      if (newBanner !== null) {
+                        triggerLightHaptic();
+                        const updatedProfile = { ...profile, banner_url: newBanner };
+                        setProfile(updatedProfile);
+                        localStorage.setItem(`instachat_profile_${userId}`, JSON.stringify(updatedProfile));
+                        if (onProfileUpdate) onProfileUpdate({ banner_url: newBanner });
+                        triggerSuccessHaptic();
+                      }
+                    }}
+                    className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-white p-2 rounded-full shadow-lg opacity-80 hover:opacity-100 transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider z-20"
+                    title="Alterar capa de fundo"
+                  >
+                    <Camera size={14} /> <span className="hidden sm:inline">Editar Capa</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Profile Body Padding */}
+              <div className="p-6 sm:p-8 space-y-6 -mt-16 sm:-mt-20 relative z-10">
               
               {/* Profile Avatar + Social Metrics Bar */}
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
@@ -796,12 +842,24 @@ export default function ProfileView({
                 {/* Avatar with Glow Ring */}
                 <div className="relative flex-shrink-0">
                   <div 
-                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 p-1 shadow-2xl transition-all"
+                    onClick={() => {
+                      if (profile?.avatar_url) {
+                        triggerLightHaptic();
+                        setIsAvatarModalOpen(true);
+                      }
+                    }}
+                    className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 p-1 shadow-2xl transition-all ${profile?.avatar_url ? 'cursor-pointer hover:scale-105 active:scale-95 group' : ''}`}
                     style={{ borderColor: activeTheme.accentColor }}
+                    title={profile?.avatar_url ? "Clique para ver a foto de perfil em tela cheia" : undefined}
                   >
-                    <div className="w-full h-full rounded-full overflow-hidden border border-white/10 bg-black/50">
+                    <div className="w-full h-full rounded-full overflow-hidden border border-white/10 bg-black/50 relative">
                       {profile?.avatar_url ? (
-                        <img src={profile.avatar_url} className="w-full h-full object-cover" />
+                        <>
+                          <img src={profile.avatar_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <ZoomIn size={24} />
+                          </div>
+                        </>
                       ) : (
                         <div className="w-full h-full bg-black/40 flex items-center justify-center text-white/30 text-4xl font-black">
                           {profile?.full_name?.charAt(0).toUpperCase()}
@@ -1247,6 +1305,7 @@ export default function ProfileView({
             >
               <LogOut size={16} /> Sair do Sistema GSI
             </button>
+              </div>
           </motion.div>
         ) : (
           <motion.div
@@ -1711,6 +1770,15 @@ export default function ProfileView({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Avatar Fullscreen Lightbox Modal */}
+      <MediaLightboxModal 
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        mediaUrl={profile?.avatar_url || ''}
+        senderName={profile?.full_name}
+        caption={`Foto de perfil de ${profile?.full_name || 'Utilizador'}`}
+      />
 
       {/* Hidden Report Template for Exporting JPG */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>

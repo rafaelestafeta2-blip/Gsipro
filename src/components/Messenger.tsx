@@ -113,30 +113,7 @@ export default function Messenger({
       const saved = localStorage.getItem('instachat_statuses');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return [
-      {
-        id: 'status-1',
-        userId: 'demo-user-1',
-        userName: 'Carlos Engenheiro',
-        userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-        type: 'text',
-        content: 'Obra principal a todo vapor! 🏗️⚡ Concreto lançado com sucesso.',
-        background: 'from-amber-600 via-yellow-500 to-orange-600',
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        views: []
-      },
-      {
-        id: 'status-2',
-        userId: 'demo-user-2',
-        userName: 'Mariana Arquiteta',
-        userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80',
-        type: 'image',
-        mediaUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb1964177?auto=format&fit=crop&w=800&q=80',
-        caption: 'Novos acabamentos de alto padrão no setor B ✨',
-        createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-        views: []
-      }
-    ];
+    return [];
   });
 
   const [showCreateStatusModal, setShowCreateStatusModal] = useState(false);
@@ -765,6 +742,13 @@ export default function Messenger({
           if (!deleted_for.includes(currentUserId)) {
             deleted_for = [...deleted_for, currentUserId];
           }
+        }
+        const storedPollVotes = localStorage.getItem(`gsi_poll_votes_${msg.id}`);
+        if (storedPollVotes) {
+          try {
+            const parsedPoll = JSON.parse(storedPollVotes);
+            if (parsedPoll) poll = parsedPoll;
+          } catch {}
         }
       } catch {}
     }
@@ -2667,6 +2651,12 @@ export default function Messenger({
       ...currentPoll,
       options: newOptions
     };
+
+    if (msg.id) {
+      try {
+        localStorage.setItem(`gsi_poll_votes_${msg.id}`, JSON.stringify(updatedPoll));
+      } catch {}
+    }
 
     const newEncoded = encodeMessageContent(msg.content, msg.reply_to, msg.reactions, {
       is_view_once: msg.is_view_once,
@@ -5491,30 +5481,90 @@ export default function Messenger({
                 </div>
               ) : activeTab === 'status' ? (
                 /* WHATSAPP-STYLE STATUS / STORIES TAB */
-                <div className="space-y-4 p-2">
-                  {/* My Status Card */}
+                <div className="space-y-6 p-3">
+                  {/* Horizontal WhatsApp-Style Stories Carousel */}
+                  <div>
+                    <h5 className="text-[9px] font-black uppercase tracking-widest text-[#d4af37] px-1 mb-3">Status em Carrossel</h5>
+                    <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar no-scrollbar">
+                      {/* My Status Story Bubble */}
+                      <div className="flex flex-col items-center flex-shrink-0 cursor-pointer group" onClick={() => {
+                        const myStatuses = statuses.filter((s: any) => s.userId === currentUserId);
+                        if (myStatuses.length > 0) {
+                          setViewingStatusGroup({
+                            userId: currentUserId,
+                            userName: userName,
+                            userAvatar: userAvatar,
+                            statuses: myStatuses
+                          });
+                          setCurrentStatusIndex(0);
+                        } else {
+                          setShowCreateStatusModal(true);
+                        }
+                      }}>
+                        <div className={`relative w-16 h-16 rounded-full p-0.5 ${statuses.filter((s: any) => s.userId === currentUserId).length > 0 ? 'bg-gradient-to-tr from-[#d4af37] via-yellow-400 to-amber-600' : 'border-2 border-dashed border-white/30'} transition-transform group-active:scale-95`}>
+                          <div className="w-full h-full rounded-full overflow-hidden bg-black flex items-center justify-center relative">
+                            {userAvatar ? (
+                              <img src={userAvatar} className="w-full h-full object-cover" alt="" />
+                            ) : (
+                              <span className="text-white font-black text-sm">{userName.charAt(0)}</span>
+                            )}
+                          </div>
+                          <div className="absolute bottom-0 right-0 w-5 h-5 bg-[#d4af37] text-black rounded-full flex items-center justify-center font-black text-xs shadow-md border-2 border-[#111b21]">
+                            <Plus size={12} />
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black text-white mt-1.5 truncate max-w-[70px]">Meu Status</span>
+                      </div>
+
+                      {/* Friends Status Story Bubbles */}
+                      {Array.from(new Set(statuses.filter((s: any) => s.userId !== currentUserId).map((s: any) => s.userId))).map(uid => {
+                        const userStatuses = statuses.filter((s: any) => s.userId === uid);
+                        if (userStatuses.length === 0) return null;
+                        const author = userStatuses[0];
+                        return (
+                          <div 
+                            key={uid}
+                            onClick={() => {
+                              setViewingStatusGroup({
+                                userId: uid,
+                                userName: author.userName,
+                                userAvatar: author.userAvatar,
+                                statuses: userStatuses
+                              });
+                              setCurrentStatusIndex(0);
+                            }}
+                            className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
+                          >
+                            <div className="w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-[#d4af37] via-emerald-500 to-blue-600 transition-transform group-active:scale-95">
+                              <div className="w-full h-full rounded-full overflow-hidden bg-black flex items-center justify-center">
+                                {author.userAvatar ? (
+                                  <img src={author.userAvatar} className="w-full h-full object-cover" alt="" />
+                                ) : (
+                                  <span className="text-white font-black text-xs">{author.userName.charAt(0)}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-white/80 mt-1.5 truncate max-w-[70px] group-hover:text-[#d4af37]">{author.userName.split(' ')[0]}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* My Status Action & Management Card */}
                   <div 
                     onClick={() => setShowCreateStatusModal(true)}
-                    className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/10 transition-all text-left cursor-pointer group"
+                    className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl bg-gradient-to-r from-white/[0.05] to-white/[0.02] hover:from-white/[0.08] hover:to-white/[0.04] border border-white/10 transition-all text-left cursor-pointer group shadow-lg"
                   >
-                    <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full border-2 border-[#d4af37] p-0.5 overflow-hidden bg-[#1c2431] flex items-center justify-center">
-                        {userAvatar ? (
-                          <img src={userAvatar} className="w-full h-full object-cover rounded-full" alt="" />
-                        ) : (
-                          <span className="text-white font-black text-sm">{userName.charAt(0)}</span>
-                        )}
-                      </div>
-                      <div className="absolute bottom-0 right-0 w-4 h-4 bg-[#d4af37] text-black rounded-full flex items-center justify-center font-black text-xs shadow-md">
-                        <Plus size={10} />
-                      </div>
+                    <div className="w-12 h-12 rounded-2xl bg-[#d4af37]/20 border border-[#d4af37]/40 flex items-center justify-center text-[#d4af37] flex-shrink-0 group-hover:scale-105 transition-transform">
+                      <Camera size={22} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-xs font-black uppercase text-white group-hover:text-[#d4af37] transition-colors">
-                        Meu Status
+                        Criar Nova Atualização
                       </h4>
                       <p className="text-[10px] text-white/50 truncate">
-                        Toque para adicionar atualização de status (foto ou texto)
+                        Publique fotos, vídeos ou status de texto premium
                       </p>
                     </div>
                   </div>
@@ -5524,26 +5574,39 @@ export default function Messenger({
                     <div className="space-y-2">
                       <h5 className="text-[9px] font-black uppercase tracking-widest text-[#d4af37] px-1">Meus Status Publicados</h5>
                       {statuses.filter((s: any) => s.userId === currentUserId).map((status: any) => (
-                        <div key={status.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                        <div 
+                          key={status.id} 
+                          onClick={() => {
+                            const myStatuses = statuses.filter((s: any) => s.userId === currentUserId);
+                            setViewingStatusGroup({
+                              userId: currentUserId,
+                              userName: userName,
+                              userAvatar: userAvatar,
+                              statuses: myStatuses
+                            });
+                            setCurrentStatusIndex(myStatuses.findIndex(s => s.id === status.id));
+                          }}
+                          className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 cursor-pointer transition-all group"
+                        >
                           <div className="flex items-center gap-3 min-w-0">
                             {status.type === 'text' ? (
-                              <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${status.background || 'from-amber-500 to-orange-600'} flex items-center justify-center text-white font-bold text-xs p-1 truncate`}>
+                              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${status.background || 'from-amber-500 to-orange-600'} flex items-center justify-center text-white font-bold text-[10px] p-1 truncate shadow`}>
                                 {status.content?.substring(0, 15)}...
                               </div>
                             ) : (
-                              <img src={status.mediaUrl} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                              <img src={status.mediaUrl} className="w-12 h-12 rounded-xl object-cover shadow border border-white/10" alt="" />
                             )}
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-white truncate">{status.content || status.caption || 'Status de Mídia'}</p>
+                              <p className="text-xs font-bold text-white group-hover:text-[#d4af37] transition-colors truncate">{status.content || status.caption || 'Status de Mídia'}</p>
                               <p className="text-[9px] text-white/40">{new Date(status.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {status.views?.length || 0} visualizações</p>
                             </div>
                           </div>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteStatus(status.id); }}
-                            className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"
+                            className="p-2.5 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors"
                             title="Excluir status"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       ))}
@@ -5569,7 +5632,7 @@ export default function Messenger({
                             });
                             setCurrentStatusIndex(0);
                           }}
-                          className="w-full flex items-center gap-3.5 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/5 border border-white/5 transition-all text-left cursor-pointer group"
+                          className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.02] hover:bg-white/5 border border-white/5 transition-all text-left cursor-pointer group"
                         >
                           <div className="relative flex-shrink-0">
                             <div className="w-12 h-12 rounded-full border-2 p-0.5 overflow-hidden bg-[#1c2431] flex items-center justify-center bg-gradient-to-tr from-[#d4af37] to-[#0084ff]">
