@@ -1985,6 +1985,150 @@ export default function ProfileView({
         )}
       </AnimatePresence>
 
+      {/* Modal: Time Entry Edit / Marking Modal for Folha de Ponto */}
+      <AnimatePresence>
+        {selectedDayEntry && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setSelectedDayEntry(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-[#111b21] border border-white/10 rounded-[2.5rem] p-6 sm:p-8 space-y-5 shadow-2xl text-white select-none"
+            >
+              <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="p-2.5 rounded-2xl text-black font-black"
+                    style={{ backgroundColor: activeTheme.accentColor }}
+                  >
+                    <CalendarIcon size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                      Ponto - Dia {selectedDayEntry.day.toString().padStart(2, '0')}
+                    </h3>
+                    <p className="text-[10px] text-white/40">
+                      {format(viewDate, 'MMMM yyyy', { locale: ptBR })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayEntry(null)}
+                  className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Absence Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Registar Falta / Ausência</span>
+                <button
+                  type="button"
+                  onClick={() => setEditIsAbsence(!editIsAbsence)}
+                  className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${editIsAbsence ? 'bg-red-500' : 'bg-white/20'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${editIsAbsence ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {!editIsAbsence ? (
+                <>
+                  {/* Hours Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block">
+                      Horas Trabalhadas
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {['4', '8', '10', '12'].map((hrs) => (
+                        <button
+                          key={hrs}
+                          type="button"
+                          onClick={() => setEditHours(hrs)}
+                          className={`py-3 rounded-2xl font-black text-xs transition-all cursor-pointer ${
+                            editHours === hrs
+                              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-105'
+                              : 'bg-white/5 border border-white/10 text-white/70 hover:text-white'
+                          }`}
+                        >
+                          {hrs} Horas
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Obra Name Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block">
+                      Nome da Obra / Local
+                    </label>
+                    <input
+                      type="text"
+                      value={editObra}
+                      onChange={(e) => setEditObra(e.target.value)}
+                      placeholder="Ex: Obra Centro, Lote 14..."
+                      className="w-full bg-[#0a0e17] border border-white/10 rounded-2xl p-3.5 text-xs font-bold text-white outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* Absence Reason */
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-red-400 uppercase tracking-widest block">
+                    Motivo da Ausência / Falta
+                  </label>
+                  <input
+                    type="text"
+                    value={editAbsenceReason}
+                    onChange={(e) => setEditAbsenceReason(e.target.value)}
+                    placeholder="Ex: Doença, Assuntos Pessoais, Intempérie..."
+                    className="w-full bg-[#0a0e17] border border-red-500/30 rounded-2xl p-3.5 text-xs font-bold text-white outline-none focus:border-red-500"
+                  />
+                </div>
+              )}
+
+              {/* Modal Buttons */}
+              <div className="flex gap-2 pt-3 border-t border-white/10">
+                {selectedDayEntry.entry && (
+                  <button
+                    type="button"
+                    onClick={deleteEntry}
+                    disabled={savingEdit}
+                    className="py-3 px-4 rounded-2xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Trash2 size={16} /> Excluir
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayEntry(null)}
+                  className="flex-1 py-3 px-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={savingEdit}
+                  onClick={saveEntryEdit}
+                  className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                >
+                  {savingEdit ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  <span>Guardar Ponto</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Avatar Fullscreen Lightbox Modal */}
       <MediaLightboxModal 
         isOpen={isAvatarModalOpen}
