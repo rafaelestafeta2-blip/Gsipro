@@ -23,6 +23,20 @@ export class UniversalAudioRecorder {
   private startTime: number = 0;
   private isUsingWebAudioOnly: boolean = false;
 
+  async startRecording(): Promise<boolean> {
+    try {
+      await this.start();
+      return true;
+    } catch (err: any) {
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || String(err).includes('Permission denied')) {
+        console.warn('[UniversalAudioRecorder] Microfone negado pelo utilizador ou dispositivo.');
+      } else {
+        console.error('[UniversalAudioRecorder] Error starting recording:', err);
+      }
+      return false;
+    }
+  }
+
   async start(): Promise<void> {
     this.cleanup();
     this.audioChunks = [];
@@ -111,6 +125,10 @@ export class UniversalAudioRecorder {
       console.warn('[UniversalAudioRecorder] MediaRecorder failed, will use Web Audio PCM WAV:', e);
       this.isUsingWebAudioOnly = true;
     }
+  }
+
+  async stopRecording(): Promise<RecordedAudio> {
+    return await this.stop();
   }
 
   async stop(): Promise<RecordedAudio> {

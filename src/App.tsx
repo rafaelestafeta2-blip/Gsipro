@@ -1,1107 +1,252 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
-import { supabase } from './services/supabaseClient';
-import { TimeEntry, Profile } from './types';
-import { exportToPDF, exportToJPG } from './lib/pdfUtils';
-import ReportTemplate from './components/ReportTemplate';
-import Auth from './components/Auth';
-import AnimatedLogo from './components/AnimatedLogo';
-import ClockMarking from './components/ClockMarking';
-import FCMPushModal from './components/FCMPushModal';
-import AppUpdateModal from './components/AppUpdateModal';
-import InstaChatLogo from './components/InstaChatLogo';
-import { useAppTheme } from './lib/theme';
-import Onboarding, { ONBOARDING_STORAGE_KEY } from './components/Onboarding';
-import IncomingCallScreen from './components/IncomingCallScreen';
-
-// Lazy Loaded Secondary Screens for Code Splitting & Instant 60FPS Startup
-const Society = lazy(() => import('./components/Society'));
-const ProfileView = lazy(() => import('./components/ProfileView'));
-const WeeklyChart = lazy(() => import('./components/WeeklyChart'));
-const AnnouncementBoard = lazy(() => import('./components/AnnouncementBoard'));
-const SocialFeed = lazy(() => import('./components/SocialFeed'));
-const ReelsView = lazy(() => import('./components/ReelsView'));
-const Messenger = lazy(() => import('./components/Messenger'));
-import { checkForAppUpdate, ReleaseInfo } from './services/appUpdateService';
-import { 
-  setupNativePushNotifications,
-  setupForegroundMessageListener,
-  requestNativeNotificationPermission, 
-  initializePushNotifications, 
-  configureAndroidNotificationChannel,
-  checkNativeNotificationPermission
-} from './services/firebaseMessaging';
-import { playNotificationSound, startIncomingCallRingtone, stopIncomingCallRingtone } from './lib/sounds';
-import { getGamificationStats } from './lib/gamification';
-import { 
-  Plus, 
-  Download, 
-  Trash2, 
-  Calendar as CalendarIcon, 
-  Clock, 
-  HardHat, 
-  FileText, 
-  User, 
-  Users, 
-  Settings, 
-  Briefcase, 
-  Home, 
-  Sun, 
-  Moon, 
-  Zap, 
-  Film, 
-  TrendingUp, 
-  MessageCircle, 
-  Heart, 
-  Phone,
-  PhoneCall,
-  PhoneOff,
-  MessageSquare,
-  X
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { App as CapApp } from '@capacitor/app';
-import { PushNotifications } from '@capacitor/push-notifications';
-import { SplashScreen } from '@capacitor/splash-screen';
-import { triggerLightHaptic, triggerMediumHaptic, triggerSuccessHaptic, triggerWarningHaptic } from './lib/haptics';
-import { getCurrentLocation } from './lib/locationService';
-import { useToast } from './lib/ToastContext';
-import NetworkStatusBar from './components/NetworkStatusBar';
-import { initNetworkService, useNetworkStatus, isOnline } from './services/networkService';
-import { initOfflineSync, addToQueue, processQueue, getPendingItems } from './services/offlineSyncService';
+import { Zap, Bell, X } from 'lucide-react';
+
+// Shared utilities & UI
+import { useAppTheme } from './shared/lib/theme';
+import { useNetworkStatus } from './shared/services/networkService';
+import { getGamificationStats } from './shared/lib/gamification';
+import { checkForAppUpdate, ReleaseInfo } from './shared/services/appUpdateService';
+import AnimatedLogo from './shared/components/AnimatedLogo';
+import ThemeSelector from './shared/components/ThemeSelector';
+import NetworkStatusBar from './shared/components/NetworkStatusBar';
+import AppUpdateModal from './shared/components/AppUpdateModal';
+import NavigationTabBar, { AppTab } from './shared/components/NavigationTabBar';
+
+// Feature modules
+import { Auth, Onboarding, ONBOARDING_STORAGE_KEY, useAuthSession } from './features/auth';
+import { FCMPushModal, usePushNotifications } from './features/notifications';
+import { useDailyCall, IncomingCallScreen, ActiveCallScreen } from './features/calls';
+import { useTimeEntries } from './features/clock/hooks/useTimeEntries';
+import HomeDashboard from './features/dashboard/components/HomeDashboard';
+import ClockMarking from './features/clock/components/ClockMarking';
+import Society from './features/social/components/Society';
+import ProfileView from './features/profile/components/ProfileView';
+import ReelsView from './features/social/components/ReelsView';
+import Messenger from './features/chat/components/Messenger';
 
 export default function App() {
-  const { showSuccess, showError, showWarning, showInfo } = useToast();
-  const { isOnline: isDeviceOnline } = useNetworkStatus();
   const { activeTheme } = useAppTheme();
-  const [session, setSession] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'home' | 'ponto' | 'society' | 'alerts' | 'profile'>('home');
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [userName, setUserName] = useState(localStorage.getItem('userName') || '');
-  const [userRole, setUserRole] = useState(localStorage.getItem('userRole') || 'Oficial');
-  const [hourlyRate, setHourlyRate] = useState(localStorage.getItem('hourlyRate') || '0');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [loading, setLoading] = useState(false);
-  
-  // Form State
-  const [day, setDay] = useState(new Date().getDate());
-  const [hours, setHours] = useState('');
-  const [obra, setObra] = useState(localStorage.getItem('currentObra') || '');
-  const [showToast, setShowToast] = useState(false);
-  const [quickHours, setQuickHours] = useState(8);
-  const [isDarkMode, setIsDarkMode] = useState(true); // Forced dark mode for premium look
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<Map<string, any>>(new Map());
+  const { session, profile, setProfile, isInitializing } = useAuthSession();
+  const { isOnline } = useNetworkStatus();
+
+  // Tab & Navigation State
+  const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [isMessengerOpen, setIsMessengerOpen] = useState(false);
   const [messengerTab, setMessengerTab] = useState<'direct' | 'groups'>('groups');
   const [messengerTargetUserId, setMessengerTargetUserId] = useState<string | undefined>(undefined);
+  const [onlineUsers] = useState<Map<string, any>>(new Map());
+
+  // App Modals State
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isFCMModalOpen, setIsFCMModalOpen] = useState(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [updateRelease, setUpdateRelease] = useState<ReleaseInfo | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+  // User Profile Helpers
+  const userName = profile?.full_name || localStorage.getItem('userName') || 'Colaborador GSI';
+  const userRole = profile?.role || localStorage.getItem('userRole') || 'Oficial';
+  const stats = getGamificationStats(0, userRole);
+
+  // Time Entries for Clock Marking
+  const {
+    entries,
+    quickMark,
+    markAbsence
+  } = useTimeEntries({
+    userId: session?.user?.id || '',
+    userRole,
+    currentObra: profile?.current_obra || '',
+    selectedMonth: new Date().getMonth(),
+    selectedYear: new Date().getFullYear()
+  });
+
+  const todayNum = new Date().getDate();
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const todayEntry = entries.find(
+    e => e.day === todayNum && e.month === currentMonth && e.year === currentYear
+  );
+
+  // Calls Hook
+  const {
+    callState,
+    callType,
+    callUser,
+    callRoomUrl,
+    isCallMuted,
+    isCallCameraOff,
+    isSpeakerOn,
+    callDurationSec,
+    localVideoRef,
+    remoteVideoRef,
+    remoteAudioRef,
+    incomingCallUser,
+    incomingCallType,
+    acceptCall,
+    declineCall,
+    endCall,
+    toggleMute,
+    toggleCamera,
+    toggleSpeaker
+  } = useDailyCall({
+    currentUserId: session?.user?.id || '',
+    userName,
+    userAvatar: profile?.avatar_url
+  });
+
+  // Push Notifications Hook
+  const { fcmRegistered, requestPermission } = usePushNotifications({
+    userId: session?.user?.id
+  });
+
+  // Check Onboarding
+  useEffect(() => {
+    if (session && !localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+      setShowOnboarding(true);
+    }
+  }, [session]);
+
+  // Check Native Updates & Status Bar
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: '#00000000' }).catch(() => {});
+    StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+
+    checkForAppUpdate().then(release => {
+      if (release?.hasUpdate) {
+        setUpdateRelease(release);
+        setIsUpdateModalOpen(true);
+      }
+    }).catch(() => {});
+
+    // Native Back Button
+    const backListener = CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (showOnboarding) {
+        setShowOnboarding(false);
+      } else if (isUpdateModalOpen) {
+        setIsUpdateModalOpen(false);
+      } else if (isThemeModalOpen) {
+        setIsThemeModalOpen(false);
+      } else if (isMessengerOpen) {
+        setIsMessengerOpen(false);
+      } else if (isFCMModalOpen) {
+        setIsFCMModalOpen(false);
+      } else if (activeTab !== 'home') {
+        setActiveTab('home');
+      } else if (canGoBack) {
+        window.history.back();
+      } else {
+        CapApp.exitApp();
+      }
+    });
+
+    return () => {
+      backListener.then(l => l.remove()).catch(() => {});
+    };
+  }, [showOnboarding, isUpdateModalOpen, isThemeModalOpen, isMessengerOpen, isFCMModalOpen, activeTab]);
 
   const handleOpenMessenger = (tab: 'direct' | 'groups' = 'groups', targetUserId?: string) => {
     setMessengerTab(tab);
     setMessengerTargetUserId(targetUserId);
     setIsMessengerOpen(true);
-    setUnreadMsgCount(0);
   };
-  const [isImmersive, setIsImmersive] = useState(false);
-  const [isFCMModalOpen, setIsFCMModalOpen] = useState(false);
-  const [fcmRegistered, setFcmRegistered] = useState(!!localStorage.getItem('gsi_fcm_token'));
-  const [incomingCallSignal, setIncomingCallSignal] = useState<any>(null);
-  const [incomingCallBanner, setIncomingCallBanner] = useState<any>(null);
-  const [incomingMessageToast, setIncomingMessageToast] = useState<{ senderId: string; senderName: string; senderAvatar?: string; content: string } | null>(null);
-  const [unreadMsgCount, setUnreadMsgCount] = useState<number>(0);
-  const [updateRelease, setUpdateRelease] = useState<ReleaseInfo | null>(null);
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
-
-  // Monitor first open after login for Onboarding
-  useEffect(() => {
-    if (session && !localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
-      setShowOnboarding(true);
-    }
-
-    const handleReplayOnboarding = () => {
-      setShowOnboarding(true);
-    };
-
-    window.addEventListener('gsi:open_onboarding', handleReplayOnboarding);
-    return () => {
-      window.removeEventListener('gsi:open_onboarding', handleReplayOnboarding);
-    };
-  }, [session]);
-
-  // Check for app updates on launch from GitHub Releases (apenas Android nativo)
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    let isMounted = true;
-    const runUpdateCheck = async () => {
-      try {
-        const release = await checkForAppUpdate();
-        if (isMounted && release && release.hasUpdate) {
-          // Verifica se o utilizador já descartou esta versão (se não for obrigatória)
-          const targetVer = release.latestVersion || release.tag_name;
-          const dismissedVer = localStorage.getItem('gsi_dismissed_update_version');
-          if (!release.isMandatory && dismissedVer === targetVer) {
-            return;
-          }
-
-          setUpdateRelease(release);
-          setIsUpdateModalOpen(true);
-        }
-      } catch (err) {
-        // Silencioso - não bloqueia o resto da aplicação
-        console.warn('[App] Update check failed:', err);
-      }
-    };
-
-    // Pequeno atraso (1.5s) para o app carregar suavemente
-    const timer = setTimeout(runUpdateCheck, 1500);
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, []);
-
-  // Silent notification channel and existing permission check on launch (never prompts user automatically)
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    let isMounted = true;
-    const checkNotificationStatus = async () => {
-      try {
-        await configureAndroidNotificationChannel();
-        const granted = await checkNativeNotificationPermission();
-        if (isMounted && granted) {
-          setNotificationsEnabled(true);
-          setFcmRegistered(true);
-          // If already granted, register device silently without any user prompt
-          await initializePushNotifications();
-        }
-      } catch (err) {
-        console.warn('[App] Silent notification check note:', err);
-      }
-    };
-
-    checkNotificationStatus();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Native Android Capacitor Lifecycle (Back button & Status Bar)
-  useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-      StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
-      StatusBar.setBackgroundColor({ color: '#00000000' }).catch(() => {});
-      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
-
-      let removeListener: (() => void) | undefined;
-      CapApp.addListener('backButton', ({ canGoBack }) => {
-        if (incomingCallBanner) {
-          stopIncomingCallRingtone();
-          setIncomingCallBanner(null);
-        } else if (showOnboarding) {
-          setShowOnboarding(false);
-          localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
-        } else if (isUpdateModalOpen) {
-          setIsUpdateModalOpen(false);
-        } else if (isMessengerOpen) {
-          setIsMessengerOpen(false);
-        } else if (isFCMModalOpen) {
-          setIsFCMModalOpen(false);
-        } else if (activeTab !== 'home') {
-          setActiveTab('home');
-        } else if (canGoBack) {
-          window.history.back();
-        } else {
-          CapApp.exitApp();
-        }
-      }).then(handle => {
-        removeListener = () => handle.remove();
-      }).catch(() => {});
-
-      return () => {
-        if (removeListener) removeListener();
-      };
-    }
-  }, [incomingCallBanner, showOnboarding, isUpdateModalOpen, isMessengerOpen, isFCMModalOpen, activeTab]);
-
-  // Unified Native Push Notifications listener registration (Capacitor Android)
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    setupNativePushNotifications({
-      userId: session?.user?.id,
-      onNotificationReceived: (notification) => {
-        console.log('[Native Push] Recebida em primeiro plano:', notification);
-        const data = notification.data || {};
-        if (data.type === 'call') {
-          const signal = {
-            type: 'incoming-call',
-            senderId: data.senderId || '',
-            senderName: data.senderName || notification.title || 'Colega de Obra',
-            senderAvatar: data.senderAvatar || '',
-            callType: data.callType || 'video',
-            roomUrl: data.roomUrl || '',
-            roomName: data.roomName || ''
-          };
-          setIncomingCallSignal(signal);
-          setIncomingCallBanner(signal);
-          startIncomingCallRingtone();
-          if (navigator.vibrate) navigator.vibrate([500, 250, 500, 250, 500]);
-        } else if (data.type === 'message' || data.type === 'private_message') {
-          playNotificationSound();
-          setIncomingMessageToast({
-            senderId: data.senderId || '',
-            senderName: data.senderName || 'Colega',
-            senderAvatar: data.senderAvatar,
-            content: data.body || notification.body || 'Nova mensagem'
-          });
-        }
-      },
-      onNotificationActionPerformed: (action) => {
-        console.log('[Native Push] Notificação clicada:', action);
-        const data = action.notification.data || {};
-        if (data.type === 'call') {
-          const signal = {
-            type: 'incoming-call',
-            senderId: data.senderId || '',
-            senderName: data.senderName || action.notification.title || 'Colega de Obra',
-            senderAvatar: data.senderAvatar || '',
-            callType: data.callType || 'video',
-            roomUrl: data.roomUrl || '',
-            roomName: data.roomName || ''
-          };
-          setIncomingCallSignal(signal);
-          setIncomingCallBanner(signal);
-          startIncomingCallRingtone();
-        } else if (data.type === 'message' || data.type === 'private_message' || data.type === 'group_message') {
-          setIsMessengerOpen(true);
-        }
-      }
-    });
-  }, [session?.user?.id]);
-
-  // Global calling listener: plays loud ringtone, vibrates phone and displays call modal
-  useEffect(() => {
-    if (!session?.user?.id) return;
-
-    const callChannel = supabase.channel(`call-signals-${session.user.id}`);
-    
-    callChannel
-      .on('broadcast', { event: 'signal' }, ({ payload }) => {
-        if (payload?.type === 'incoming-call') {
-          console.log('[App Call Listener] Received global call signal:', payload);
-          setIncomingCallSignal(payload);
-          setIncomingCallBanner(payload);
-          startIncomingCallRingtone();
-          if (navigator.vibrate) navigator.vibrate([500, 250, 500, 250, 500]);
-        } else if (payload?.type === 'call-declined' || payload?.type === 'hangup' || payload?.type === 'call-ended') {
-          stopIncomingCallRingtone();
-          setIncomingCallBanner(null);
-        }
-      })
-      .subscribe();
-
-    // Global listener for incoming direct messages when Messenger modal is closed
-    const msgChannel = supabase.channel(`global-messages-${session.user.id}`);
-    msgChannel
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `receiver_id=eq.${session.user.id}`
-      }, (payload) => {
-        const msg = payload.new as any;
-        console.log('[App Message Listener] Incoming message:', msg);
-        if (!isMessengerOpen) {
-          playNotificationSound();
-          setUnreadMsgCount(prev => prev + 1);
-
-          const sProfile = onlineUsers.get(msg.sender_id);
-          const sName = sProfile?.full_name || 'Colega de Obra';
-          const sAvatar = sProfile?.avatar_url;
-
-          setIncomingMessageToast({
-            senderId: msg.sender_id,
-            senderName: sName,
-            senderAvatar: sAvatar,
-            content: msg.type === 'audio' ? '🎵 Mensagem de áudio' : (msg.type === 'image' ? '📷 Foto' : (msg.content || 'Nova mensagem'))
-          });
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(callChannel);
-      supabase.removeChannel(msgChannel);
-    };
-  }, [session, isMessengerOpen, onlineUsers]);
-
-  // Handle URL launch parameters and foreground push toast
-  useEffect(() => {
-    setupForegroundMessageListener((payload: any) => {
-      showInfo(payload?.notification?.body || 'Novo alerta de ponto recebido!', 'ALERTA GSI');
-    });
-
-    if (typeof window !== 'undefined') {
-      // Check if launched from a push notification click with query params
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('incomingCall') === 'true') {
-        const callerSignal = {
-          type: 'incoming-call',
-          senderId: urlParams.get('callerId') || '',
-          senderName: urlParams.get('callerName') || 'Colega',
-          senderAvatar: urlParams.get('callerAvatar') || '',
-          callType: urlParams.get('callType') || 'video'
-        };
-        setIncomingCallSignal(callerSignal);
-        setIncomingCallBanner(callerSignal);
-        startIncomingCallRingtone();
-        window.history.replaceState({}, '', '/');
-      } else if (urlParams.get('openMessenger') === 'true') {
-        setIsMessengerOpen(true);
-        window.history.replaceState({}, '', '/');
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!session?.user?.id) return;
-
-    const channel = supabase.channel('online-users', {
-      config: {
-        presence: {
-          key: session.user.id,
-        },
-      },
-    });
-
-    const updateUserLocation = async () => {
-      try {
-        const coords = await getCurrentLocation({ enableHighAccuracy: false, timeout: 6000 });
-        const { latitude, longitude } = coords;
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`);
-        const data = await response.json();
-        const city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || data.address?.county || 'Portugal';
-        
-        // Update profile
-        await supabase.from('profiles').update({ location_city: city }).eq('id', session.user.id);
-        
-        // Update presence on the active channel
-        if (channel && (channel.state === 'joined' || channel.state === 'joining')) {
-          await channel.track({
-            online_at: new Date().toISOString(),
-            city: city
-          });
-        }
-        
-        // Sync local state
-        setProfile(prev => prev ? { ...prev, location_city: city } : null);
-      } catch (err) {
-        console.warn('[App] Localização online não disponível:', err);
-      }
-    };
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const newState = channel.presenceState();
-        const usersMap = new Map();
-        Object.entries(newState).forEach(([key, value]: [string, any]) => {
-          usersMap.set(key, value[0]);
-        });
-        setOnlineUsers(usersMap);
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            online_at: new Date().toISOString(),
-          });
-          updateUserLocation();
-        }
-      });
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [session]);
-
-  const requestNotificationPermission = async () => {
-    if (!Capacitor.isNativePlatform()) return;
-    try {
-      const token = await requestNativeNotificationPermission(session?.user?.id);
-      if (token) {
-        setNotificationsEnabled(true);
-        setFcmRegistered(true);
-      }
-    } catch (err) {
-      console.warn('Erro seguro ao solicitar permissão de notificações no App.tsx:', err);
-    }
-  };
-
-  const checkMissingEntries = (_currentEntries: TimeEntry[]) => {
-    // Web notifications removed. Android native FCM notifications are handled via push channel.
-  };
-
-  useEffect(() => {
-    if (session && entries.length > 0) {
-      const interval = setInterval(() => checkMissingEntries(entries), 1000 * 60 * 60); // Check every hour
-      checkMissingEntries(entries); // Check once on load
-      return () => clearInterval(interval);
-    }
-  }, [session, entries]);
-
-  const handleAbsence = async (reason: string) => {
-    if (!session) return;
-    const today = new Date();
-    const isOfflineNow = !isOnline();
-
-    const newEntry: TimeEntry = {
-      day: today.getDate(),
-      month: today.getMonth(),
-      year: today.getFullYear(),
-      hours: '00:00',
-      obra: 'FALTA',
-      description: reason.toUpperCase(),
-      user_id: session.user.id,
-      is_absence: true,
-      absence_reason: reason,
-      sync_status: isOfflineNow ? 'pending_sync' : 'synced'
-    };
-
-    setEntries(prev => {
-      const filtered = prev.filter(e => e.day !== today.getDate());
-      const updated = [...filtered, newEntry].sort((a, b) => a.day - b.day);
-      localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(updated));
-      return updated;
-    });
-
-    if (isOfflineNow) {
-      addToQueue('time_entry', newEntry);
-      showInfo('Ponto guardado offline. Vai sincronizar quando houver rede.', 'PONTO OFFLINE');
-      return;
-    }
-
-    try {
-      await supabase
-        .from('time_entries')
-        .delete()
-        .eq('day', today.getDate())
-        .eq('month', today.getMonth())
-        .eq('year', today.getFullYear())
-        .eq('user_id', session.user.id);
-
-      const { error } = await supabase.from('time_entries').insert([{
-        day: today.getDate(),
-        month: today.getMonth(),
-        year: today.getFullYear(),
-        hours: '00:00',
-        obra: 'FALTA',
-        description: reason.toUpperCase(),
-        user_id: session.user.id,
-        is_absence: true,
-        absence_reason: reason
-      }]);
-      if (error) throw error;
-      showSuccess(`Falta do dia ${today.getDate()} justificada com sucesso!`, 'AUSÊNCIA REGISTADA');
-      fetchEntries();
-    } catch (err) {
-      console.warn('[App] Supabase offline fallback for absence:', err);
-      newEntry.sync_status = 'pending_sync';
-      setEntries(prev => {
-        const filtered = prev.filter(e => e.day !== today.getDate());
-        const updated = [...filtered, newEntry].sort((a, b) => a.day - b.day);
-        localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(updated));
-        return updated;
-      });
-      addToQueue('time_entry', newEntry);
-      showInfo('Ponto guardado offline. Vai sincronizar quando houver rede.', 'PONTO OFFLINE');
-    }
-  };
-
-  useEffect(() => {
-    initNetworkService();
-    initOfflineSync();
-
-    const handleOfflineSyncFinished = () => {
-      fetchEntries();
-    };
-    window.addEventListener('gsi:offline_sync_completed', handleOfflineSyncFinished);
-
-    const hideSplash = () => {
-      if (Capacitor.isNativePlatform()) {
-        SplashScreen.hide({ fadeOutDuration: 400 }).catch(() => {});
-      }
-    };
-
-    let isMounted = true;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted) return;
-      if (session) {
-        setSession(session);
-        fetchProfile(session.user.id);
-      }
-      setIsInitializing(false);
-      hideSplash();
-    }).catch(() => {
-      if (isMounted) setIsInitializing(false);
-      hideSplash();
-    });
-
-    const safetyTimer = setTimeout(() => {
-      if (isMounted) {
-        setIsInitializing(false);
-        hideSplash();
-      }
-    }, 2500);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) return;
-      if (session) {
-        setSession(session);
-        fetchProfile(session.user.id);
-      } else {
-        setSession(null);
-        setProfile(null);
-        setEntries([]);
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('currentObra');
-      }
-      setIsInitializing(false);
-    });
-
-    return () => {
-      isMounted = false;
-      clearTimeout(safetyTimer);
-      subscription.unsubscribe();
-      window.removeEventListener('gsi:offline_sync_completed', handleOfflineSyncFinished);
-    };
-  }, []);
-
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (data) {
-      setProfile(data);
-      setUserName(data.full_name);
-      setUserRole(data.role);
-      setHourlyRate(data.hourly_rate.toString());
-      if (data.current_obra) setObra(data.current_obra);
-    }
-  };
-
-  const today = new Date();
-  const isCurrentMonth = today.getMonth() === selectedMonth && today.getFullYear() === selectedYear;
-
-  const fillAllDays = async () => {
-    if (!session) return;
-    if (!hours || !obra) {
-      alert('Por favor, defina as horas e a obra padrão para preencher o mês.');
-      return;
-    }
-
-    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-    const newEntries: TimeEntry[] = [];
-
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(selectedYear, selectedMonth, d);
-      const isSunday = date.getDay() === 0;
-
-      newEntries.push({
-        day: d,
-        month: selectedMonth,
-        year: selectedYear,
-        hours: isSunday ? '0' : hours,
-        obra: isSunday ? 'FOLGA' : obra.toUpperCase(),
-        description: userRole.toUpperCase(),
-        user_id: session.user.id
-      });
-    }
-
-    setEntries(newEntries);
-    localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(newEntries));
-
-    try {
-      await supabase
-        .from('time_entries')
-        .delete()
-        .eq('month', selectedMonth)
-        .eq('year', selectedYear)
-        .eq('user_id', session.user.id);
-        
-      await supabase.from('time_entries').insert(newEntries);
-      fetchEntries();
-    } catch (err) {
-      console.warn('Sincronização falhou');
-    }
-  };
-
-  const clearMonth = async () => {
-    if (!session) return;
-    if (!confirm('Tem certeza que deseja apagar TODOS os registros deste mês?')) return;
-    
-    setEntries([]);
-    localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, '[]');
-    
-    try {
-      await supabase
-        .from('time_entries')
-        .delete()
-        .eq('month', selectedMonth)
-        .eq('year', selectedYear)
-        .eq('user_id', session.user.id);
-    } catch (err) {
-      console.warn('Erro ao limpar no Supabase.');
-    }
-  };
-
-  useEffect(() => {
-    if (session) {
-      fetchEntries();
-    }
-  }, [selectedMonth, selectedYear, session]);
-
-  const fetchEntries = async () => {
-    if (!session) return;
-    setLoading(true);
-    const localData = JSON.parse(localStorage.getItem(`entries_${selectedMonth}_${selectedYear}`) || '[]');
-    setEntries(localData);
-
-    try {
-      const { data, error } = await supabase
-        .from('time_entries')
-        .select('*')
-        .eq('month', selectedMonth)
-        .eq('year', selectedYear)
-        .eq('user_id', session.user.id)
-        .order('day', { ascending: true });
-
-      if (!error && data) {
-        setEntries(data);
-        localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(data));
-      }
-    } catch (err) {
-      console.warn('Supabase offline.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddEntry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!session) return;
-
-    const currentWorkSite = profile?.current_obra || obra || 'OBRA NÃO DEFINIDA';
-    const isOfflineNow = !isOnline();
-
-    const newEntry: TimeEntry = {
-      day,
-      month: selectedMonth,
-      year: selectedYear,
-      hours,
-      obra: currentWorkSite.toUpperCase(),
-      description: userRole.toUpperCase(),
-      user_id: session.user.id,
-      sync_status: isOfflineNow ? 'pending_sync' : 'synced'
-    };
-
-    setEntries(prev => {
-      const filtered = prev.filter(e => e.day !== day);
-      const updated = [...filtered, newEntry].sort((a, b) => a.day - b.day);
-      localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(updated));
-      return updated;
-    });
-
-    if (isOfflineNow) {
-      addToQueue('time_entry', newEntry);
-      setHours('');
-      setObra('');
-      showInfo('Ponto guardado offline. Vai sincronizar quando houver rede.', 'PONTO OFFLINE');
-      return;
-    }
-
-    try {
-      await supabase
-        .from('time_entries')
-        .delete()
-        .eq('day', day)
-        .eq('month', selectedMonth)
-        .eq('year', selectedYear)
-        .eq('user_id', session.user.id);
-
-      const { error } = await supabase.from('time_entries').insert([{
-        day,
-        month: selectedMonth,
-        year: selectedYear,
-        hours,
-        obra: currentWorkSite.toUpperCase(),
-        description: userRole.toUpperCase(),
-        user_id: session.user.id
-      }]);
-      if (error) throw error;
-      
-      setHours('');
-      setObra('');
-      showSuccess(`Ponto registado para o dia ${day}: ${hours}h na obra ${obra || 'padrão'}!`, 'PONTO REGISTADO');
-      fetchEntries();
-    } catch (err) {
-      console.warn('[App] Supabase offline fallback for add entry:', err);
-      newEntry.sync_status = 'pending_sync';
-      setEntries(prev => {
-        const filtered = prev.filter(e => e.day !== day);
-        const updated = [...filtered, newEntry].sort((a, b) => a.day - b.day);
-        localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(updated));
-        return updated;
-      });
-      addToQueue('time_entry', newEntry);
-      setHours('');
-      setObra('');
-      showInfo('Ponto guardado offline. Vai sincronizar quando houver rede.', 'PONTO OFFLINE');
-    }
-  };
-
-  const handleQuickMark = async (quickHours: number) => {
-    if (!session) return;
-    await triggerSuccessHaptic();
-    const today = new Date();
-    const currentWorkSite = profile?.current_obra || obra || 'OBRA NÃO DEFINIDA';
-    const isOfflineNow = !isOnline();
-    
-    const newEntry: TimeEntry = {
-      day: today.getDate(),
-      month: today.getMonth(),
-      year: today.getFullYear(),
-      hours: `${quickHours.toString().padStart(2, '0')}:00`,
-      obra: currentWorkSite.toUpperCase(),
-      description: userRole.toUpperCase(),
-      user_id: session.user.id,
-      sync_status: isOfflineNow ? 'pending_sync' : 'synced'
-    };
-
-    setEntries(prev => {
-      const filtered = prev.filter(e => e.day !== today.getDate());
-      const updated = [...filtered, newEntry].sort((a, b) => a.day - b.day);
-      localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(updated));
-      return updated;
-    });
-
-    if (isOfflineNow) {
-      addToQueue('time_entry', newEntry);
-      showInfo('Ponto guardado offline. Vai sincronizar quando houver rede.', 'PONTO OFFLINE');
-      return;
-    }
-
-    try {
-      await supabase
-        .from('time_entries')
-        .delete()
-        .eq('day', today.getDate())
-        .eq('month', today.getMonth())
-        .eq('year', today.getFullYear())
-        .eq('user_id', session.user.id);
-
-      const { error } = await supabase.from('time_entries').insert([{
-        day: today.getDate(),
-        month: today.getMonth(),
-        year: today.getFullYear(),
-        hours: `${quickHours.toString().padStart(2, '0')}:00`,
-        obra: currentWorkSite.toUpperCase(),
-        description: userRole.toUpperCase(),
-        user_id: session.user.id
-      }]);
-      if (error) throw error;
-      showSuccess(`Ponto de hoje (${quickHours}h) registado com sucesso!`, 'PONTO REGISTADO');
-      fetchEntries();
-    } catch (err) {
-      console.warn('[App] Supabase offline fallback for quick mark:', err);
-      newEntry.sync_status = 'pending_sync';
-      setEntries(prev => {
-        const filtered = prev.filter(e => e.day !== today.getDate());
-        const updated = [...filtered, newEntry].sort((a, b) => a.day - b.day);
-        localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(updated));
-        return updated;
-      });
-      addToQueue('time_entry', newEntry);
-      showInfo('Ponto guardado offline. Vai sincronizar quando houver rede.', 'PONTO OFFLINE');
-    }
-  };
-
-  const handleDeleteEntry = async (id?: string, localIndex?: number) => {
-    const updatedEntries = entries.filter((_, i) => i !== localIndex);
-    setEntries(updatedEntries);
-    localStorage.setItem(`entries_${selectedMonth}_${selectedYear}`, JSON.stringify(updatedEntries));
-
-    if (id) {
-      try {
-        await supabase.from('time_entries').delete().eq('id', id);
-      } catch (err) {
-        console.warn('Erro ao deletar');
-      }
-    }
-  };
-
-  const handleExport = (format: 'pdf' | 'jpg') => {
-    const baseName = `Relatorio_Ponto_${userName.replace(/\s+/g, '_')}_${selectedMonth + 1}_${selectedYear}`;
-    if (format === 'pdf') {
-      exportToPDF('report-template', `${baseName}.pdf`);
-    } else {
-      exportToJPG('report-template', `${baseName}.jpg`);
-    }
-  };
-
-  const totalHours = useMemo(() => {
-    return entries.reduce((acc, curr) => {
-      if (!curr.hours) return acc;
-      const [h, m] = curr.hours.split(':').map(Number);
-      return acc + (isNaN(h) ? 0 : h) + (isNaN(m) ? 0 : m / 60);
-    }, 0);
-  }, [entries]);
-
-  const totalPayment = useMemo(() => {
-    return totalHours * parseFloat(hourlyRate || '0');
-  }, [totalHours, hourlyRate]);
-
-  const stats = useMemo(() => {
-    return getGamificationStats(entries.length, profile?.role || 'Oficial');
-  }, [entries.length, profile?.role]);
-
-  const hasMarkedToday = useMemo(() => {
-    const today = new Date();
-    return entries.some(e => 
-      e.day === today.getDate() && 
-      e.month === today.getMonth() && 
-      e.year === today.getFullYear()
-    );
-  }, [entries]);
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-[#0a0e17] flex flex-col items-center justify-center p-4 relative overflow-hidden text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,194,255,0.12)_0%,transparent_70%)] pointer-events-none" />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="flex flex-col items-center space-y-6 relative z-10"
-        >
-          <AnimatedLogo size={110} showText={false} />
-          <div className="text-center space-y-1.5 mt-2">
-            <h1 className="text-3xl font-black tracking-tighter uppercase">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00c2ff] to-[#3b82f6]">INSTA</span>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3b82f6] via-[#a855f7] to-[#ec4899] ml-1.5">CHAT</span>
-            </h1>
-            <p className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.4em]">A carregar aplicação...</p>
-          </div>
-          <div className="w-52 h-1.5 bg-white/10 rounded-full overflow-hidden mt-4 p-0.5 border border-white/10 shadow-lg shadow-cyan-500/20">
-            <motion.div 
-              className="h-full bg-gradient-to-r from-[#00c2ff] via-[#3b82f6] to-[#a855f7] rounded-full"
-              initial={{ x: '-100%' }}
-              animate={{ x: '100%' }}
-              transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-            />
-          </div>
-        </motion.div>
+      <div className="min-h-screen bg-[#07090e] flex flex-col items-center justify-center p-4">
+        <AnimatedLogo className="w-16 h-16 animate-pulse" />
+        <span className="text-xs font-black tracking-widest text-[#d4af37] uppercase mt-4">
+          A carregar GSI PRO...
+        </span>
       </div>
     );
   }
 
-  if (!session) return <Auth />;
+  if (!session) {
+    return <Auth />;
+  }
 
   return (
-    <div 
-      className={`min-h-screen text-white font-sans transition-all duration-500 overflow-x-hidden ${activeTheme.bgClass}`}
-      style={{
-        paddingBottom: 'calc(5.75rem + env(safe-area-inset-bottom, 0px))'
-      }}
-    >
-      {/* Network Status Offline/Syncing Banner */}
+    <div className={`min-h-screen ${activeTheme.bgClass} text-white flex flex-col font-sans transition-colors duration-300 relative select-none pb-24`}>
       <NetworkStatusBar />
 
-      {/* Background radial glow */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-900/20 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-950/20 blur-[120px] rounded-full" />
-      </div>
-
-      {/* Header */}
-      {!isImmersive && (
-        <header 
-          className={`flex justify-between items-center px-6 pb-3 sticky top-0 z-[60] transition-all border-b ${activeTheme.headerBg}`}
-          style={{
-            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.85rem)'
-          }}
-        >
-          <InstaChatLogo size="md" />
-
-          <div className="flex items-center gap-3">
-            <p className="hidden sm:block text-[10px] font-bold opacity-50 uppercase tracking-widest">
-              {format(today, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+      {/* Top Header */}
+      <header
+        className="px-5 py-3 border-b border-white/5 flex items-center justify-between sticky top-0 z-40 bg-[#07090e]/95 backdrop-blur-xl"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+      >
+        <div className="flex items-center gap-3">
+          <AnimatedLogo className="w-9 h-9" />
+          <div>
+            <h1 className="text-sm font-black tracking-widest text-white uppercase flex items-center gap-1.5">
+              <span>GSI PRO</span>
+              <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-[#d4af37] text-black">
+                {userRole.toUpperCase()}
+              </span>
+            </h1>
+            <p className="text-[9px] text-white/40 uppercase tracking-widest">
+              {profile?.current_obra || 'Estaleiro Geral'}
             </p>
-            <button 
-              onClick={() => {
-                setIsMessengerOpen(true);
-                setUnreadMsgCount(0);
-              }}
-              className="w-10 h-10 rounded-full border border-cyan-500/20 flex items-center justify-center bg-cyan-500/10 hover:bg-cyan-500/20 transition-all relative shadow-lg shadow-cyan-500/10"
-              title="Chat & Mensagens INSTA CHAT"
-            >
-              <Zap size={18} className="text-[#00c2ff] fill-[#00c2ff]/20" />
-              {unreadMsgCount > 0 ? (
-                <div className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 bg-red-500 text-white font-black text-[10px] rounded-full flex items-center justify-center animate-bounce shadow-lg shadow-red-500/40 border border-[#0a0e17]">
-                  {unreadMsgCount}
-                </div>
-              ) : (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#00c2ff] border-2 border-[#0a0e17] rounded-full animate-pulse" />
-              )}
-            </button>
           </div>
-        </header>
-      )}
+        </div>
 
-      <main className={`${isImmersive ? 'px-0 pt-0 pb-0' : 'px-6 pb-28'} space-y-8 relative z-10`}>
-        <Suspense fallback={
-          <div className="flex flex-col items-center justify-center p-12 space-y-3 text-slate-400 min-h-[300px]">
-            <div className="w-8 h-8 border-2 border-[#d4af37] border-t-transparent rounded-full animate-spin" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">A carregar ecrã...</span>
-          </div>
-        }>
-          <AnimatePresence mode="wait">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsFCMModalOpen(true)}
+            className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all relative cursor-pointer"
+            title="Notificações Push"
+          >
+            <Bell size={18} />
+            {fcmRegistered && (
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-emerald-500 shadow-sm" />
+            )}
+          </button>
+
+          {/* O Raio do Messenger */}
+          <button
+            type="button"
+            onClick={() => handleOpenMessenger('groups')}
+            className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#d4af37]/30 to-[#f3e5ab]/20 border border-[#d4af37]/50 flex items-center justify-center text-[#d4af37] hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer"
+            title="Abrir Messenger"
+          >
+            <Zap size={20} className="fill-[#d4af37] stroke-[#d4af37]" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Tab Content */}
+      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
+        <AnimatePresence mode="wait">
           {activeTab === 'home' && (
-            <motion.div 
+            <HomeDashboard
               key="home"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
-            >
-              {/* User Profile Card */}
-              <div 
-                className={`border rounded-[2.5rem] p-8 flex flex-col items-center text-center space-y-4 shadow-2xl relative overflow-hidden group transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}
-              >
-                <div 
-                  className="absolute top-0 left-0 w-full h-1" 
-                  style={{ background: `linear-gradient(to right, transparent, ${activeTheme.accentColor}, transparent)` }}
-                />
-                <div className="relative">
-                  <div 
-                    className="w-24 h-24 rounded-full border-[3px] p-1 shadow-2xl"
-                    style={{ borderColor: activeTheme.accentColor }}
-                  >
-                    <div className="w-full h-full rounded-full overflow-hidden border border-white/10">
-                      {profile?.avatar_url ? (
-                        <img src={profile.avatar_url} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-black/40 flex items-center justify-center text-white/20 text-3xl font-black">
-                          {userName ? userName.charAt(0).toUpperCase() : '?'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div 
-                    className="absolute -bottom-1 -right-1 w-6 h-6 border-4 border-[#1c2431] rounded-full flex items-center justify-center shadow-md"
-                    style={{ backgroundColor: activeTheme.accentColor }}
-                  >
-                    <TrendingUp size={10} className="text-black" />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-center gap-2">
-                    <h2 className="text-2xl font-black text-white tracking-tighter uppercase">{userName || 'Usuário'}</h2>
-                    <span 
-                      className="text-black text-[8px] font-black px-1.5 py-0.5 rounded uppercase shadow-sm"
-                      style={{ backgroundColor: activeTheme.accentColor }}
-                    >
-                      NV {stats.level}
-                    </span>
-                  </div>
-                  <div 
-                    className="rounded-full px-4 py-1 inline-block border"
-                    style={{ 
-                      backgroundColor: `${activeTheme.accentColor}18`, 
-                      borderColor: `${activeTheme.accentColor}35`,
-                      color: activeTheme.accentColor
-                    }}
-                  >
-                    <p className="text-[10px] font-black uppercase tracking-widest">{stats.rankName}</p>
-                  </div>
-                </div>
-
-                {/* Performance Stats */}
-                <div className="w-full pt-4 space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-end px-1">
-                      <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">XP Progress</p>
-                      <p className="text-[9px] font-black" style={{ color: activeTheme.accentColor }}>
-                        {stats.xp} / {(stats.level + 1) * 1000} XP
-                      </p>
-                    </div>
-                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${stats.progress}%` }}
-                        className="h-full rounded-full"
-                        style={{ background: `linear-gradient(to right, ${activeTheme.accentColor}, ${activeTheme.secondaryColor})` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-white/5 pt-6">
-                    <div className="flex items-center gap-4">
-                      <div 
-                        className="w-12 h-12 rounded-full border-[3px] border-r-transparent animate-[spin_4s_linear_infinite] flex items-center justify-center"
-                        style={{ borderColor: activeTheme.accentColor, borderRightColor: 'transparent' }}
-                      >
-                        <div 
-                          className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[8px] font-black"
-                          style={{ color: activeTheme.accentColor }}
-                        >
-                          {Math.floor(stats.progress)}%
-                        </div>
-                      </div>
-                      <div className="text-left">
-                        <p className="text-xs font-black text-white">Carreira Profissional</p>
-                        <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest">Patente: {stats.rankName} | Total XP: {stats.xp}</p>
-                      </div>
-                    </div>
-                    <TrendingUp size={24} style={{ color: activeTheme.accentColor }} className="opacity-60" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Announcements Section */}
-              <AnnouncementBoard 
-                isAdmin={profile?.is_admin || false} 
-                userId={session.user.id}
-                userName={userName}
-              />
-
-              {/* Social Feed Section */}
-              <SocialFeed 
-                currentUserId={session.user.id}
-                userName={userName}
-                userRole={userRole}
-                userAvatar={profile?.avatar_url}
-                isAdmin={profile?.is_admin || false}
-              />
-            </motion.div>
+              profile={profile}
+              userName={userName}
+              userRole={userRole}
+              userId={session.user.id}
+              stats={stats}
+              activeTheme={activeTheme}
+            />
           )}
 
           {activeTab === 'reels' && (
             <motion.div
               key="reels"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
             >
-              <ReelsView 
-                currentUserId={session.user.id} 
-                userName={userName} 
+              <ReelsView
+                currentUserId={session.user.id}
+                userName={userName}
                 userAvatar={profile?.avatar_url}
                 isAdmin={profile?.is_admin || false}
               />
@@ -1111,42 +256,35 @@ export default function App() {
           {activeTab === 'ponto' && (
             <motion.div
               key="ponto"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
             >
-              <ClockMarking 
-                onMark={handleQuickMark} 
-                onAbsence={handleAbsence}
-                isDarkMode={true} 
-                hasMarkedToday={hasMarkedToday}
-                todayEntry={entries.find(e => 
-                  e.day === today.getDate() && 
-                  e.month === today.getMonth() && 
-                  e.year === today.getFullYear()
-                ) || null}
-                isOffline={!isDeviceOnline}
-                pendingSyncCount={getPendingItems('time_entry').length}
-                onSyncNow={() => processQueue()}
+              <ClockMarking
+                onMark={(h) => quickMark(h)}
+                onAbsence={(r) => markAbsence(r)}
+                isDarkMode={true}
+                hasMarkedToday={!!todayEntry}
+                todayEntry={todayEntry}
+                isOffline={!isOnline}
               />
             </motion.div>
           )}
 
           {activeTab === 'society' && (
             <motion.div
-              key="society-full"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              key="society"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
             >
-              <Society 
-                isDarkMode={true} 
-                onlineUsers={onlineUsers} 
+              <Society
                 currentUserId={session.user.id}
                 userName={userName}
                 userAvatar={profile?.avatar_url}
-                onToggleImmersive={(open) => setIsImmersive(open)}
-                onOpenMessenger={(tab, userId) => handleOpenMessenger(tab, userId)}
+                onlineUsers={onlineUsers}
+                onOpenMessenger={handleOpenMessenger}
+                isDarkMode={true}
               />
             </motion.div>
           )}
@@ -1154,268 +292,118 @@ export default function App() {
           {activeTab === 'profile' && (
             <motion.div
               key="profile"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
             >
-              <ProfileView 
-                userId={session.user.id} 
+              <ProfileView
+                userId={session.user.id}
+                currentUserId={session.user.id}
+                isDarkMode={true}
                 onProfileUpdate={(updated) => {
-                  setProfile(prev => prev ? { ...prev, ...updated } : null);
-                  if (updated.full_name) setUserName(updated.full_name);
-                  if (updated.role) setUserRole(updated.role);
-                  if (updated.hourly_rate !== undefined) setHourlyRate(updated.hourly_rate.toString());
-                  if (updated.current_obra !== undefined) setObra(updated.current_obra);
+                  if (profile) setProfile({ ...profile, ...updated });
                 }}
               />
             </motion.div>
           )}
         </AnimatePresence>
-        </Suspense>
       </main>
 
-      {/* Mobile Navigation */}
-      {!isImmersive && (
-        <nav 
-          className={`fixed bottom-0 left-0 right-0 border-t border-white/10 flex items-center justify-around px-4 z-[60] transition-all ${activeTheme.navBg}`}
-          style={{
-            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-            height: 'calc(4.75rem + env(safe-area-inset-bottom, 0px))'
-          }}
-        >
-          <button 
-            onClick={() => {
-              triggerLightHaptic();
-              setActiveTab('home');
-            }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'home' ? 'scale-110 font-black' : 'text-white/30'}`}
-            style={activeTab === 'home' ? { color: activeTheme.accentColor } : {}}
-          >
-            <Home size={22} style={activeTab === 'home' ? { color: activeTheme.accentColor } : {}} />
-            <span className="text-[7px] font-black uppercase tracking-widest">Home</span>
-          </button>
-          <button 
-            onClick={() => {
-              triggerLightHaptic();
-              setActiveTab('reels');
-            }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'reels' ? 'scale-110 font-black' : 'text-white/30'}`}
-            style={activeTab === 'reels' ? { color: activeTheme.accentColor } : {}}
-          >
-            <Film size={22} style={activeTab === 'reels' ? { color: activeTheme.accentColor } : {}} />
-            <span className="text-[7px] font-black uppercase tracking-widest">Reels</span>
-          </button>
-          <button 
-            onClick={() => {
-              triggerLightHaptic();
-              setActiveTab('ponto');
-            }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'ponto' ? 'scale-110 font-black' : 'text-white/30'}`}
-            style={activeTab === 'ponto' ? { color: activeTheme.accentColor } : {}}
-          >
-            <div 
-              className={`p-3 rounded-full border-2 -mt-8 transition-all shadow-xl`}
-              style={activeTab === 'ponto' ? {
-                borderColor: activeTheme.accentColor,
-                backgroundColor: `${activeTheme.accentColor}20`,
-                boxShadow: `0 0 20px ${activeTheme.accentColor}40`,
-                color: activeTheme.accentColor
-              } : {
-                borderColor: 'rgba(255,255,255,0.1)',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                color: '#ffffff'
-              }}
-            >
-              <Clock size={24} />
-            </div>
-            <span className="text-[7px] font-black uppercase tracking-widest mt-1">Ponto</span>
-          </button>
-          <button 
-            onClick={() => {
-              triggerLightHaptic();
-              setActiveTab('society');
-            }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'society' ? 'scale-110 font-black' : 'text-white/30'}`}
-            style={activeTab === 'society' ? { color: activeTheme.accentColor } : {}}
-          >
-            <Users size={22} style={activeTab === 'society' ? { color: activeTheme.accentColor } : {}} />
-            <span className="text-[7px] font-black uppercase tracking-widest">Equipa</span>
-          </button>
-          <button 
-            onClick={() => {
-              triggerLightHaptic();
-              setActiveTab('profile');
-            }}
-            className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'profile' ? 'scale-110 font-black' : 'text-white/30'}`}
-            style={activeTab === 'profile' ? { color: activeTheme.accentColor } : {}}
-          >
-            <User size={22} style={activeTab === 'profile' ? { color: activeTheme.accentColor } : {}} />
-            <span className="text-[7px] font-black uppercase tracking-widest">Perfil</span>
-          </button>
-        </nav>
-      )}
-
-      {/* Hidden Report Template for PDF */}
-      <div className="fixed left-[-9999px] top-[-9999px]">
-        <ReportTemplate 
-          userName={userName}
-          userRole={userRole}
-          month={selectedMonth}
-          year={selectedYear}
-          entries={entries}
-          totalHours={totalHours}
-          totalPayment={totalPayment}
-        />
-      </div>
-
-      <footer className={`hidden md:flex px-12 py-10 border-t justify-between items-center text-[10px] font-black uppercase tracking-[0.3em] transition-colors ${isDarkMode ? 'bg-[#0f172a] border-slate-800 text-slate-500' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-        <div>PROYECTOS GSI, S.L — GSI PRO SYSTEMS</div>
-        <div>SISTEMA DE GESTÃO DE CAPITAL HUMANO © {selectedYear}</div>
-      </footer>
-
-      <AnimatePresence>
-        {isMessengerOpen && session && (
-          <Suspense fallback={null}>
-            <Messenger 
-              currentUserId={session.user.id} 
-              userName={userName}
-              userAvatar={profile?.avatar_url}
-              initialTab={messengerTab}
-              initialDirectUserId={messengerTargetUserId}
-              onClose={() => setIsMessengerOpen(false)} 
-              onlineUsers={onlineUsers}
-              incomingCallSignal={incomingCallSignal}
-              onClearIncomingCallSignal={() => setIncomingCallSignal(null)}
-            />
-          </Suspense>
-        )}
-      </AnimatePresence>
-
-      {/* Incoming Call Overlay Modal */}
-      <AnimatePresence>
-        {incomingCallBanner && (
-          <IncomingCallScreen
-            callerName={incomingCallBanner.senderName || 'Colega de Obra'}
-            callerAvatar={incomingCallBanner.senderAvatar}
-            callType={incomingCallBanner.callType === 'video' ? 'video' : 'audio'}
-            onAccept={() => {
-              triggerSuccessHaptic();
-              stopIncomingCallRingtone();
-              setIncomingCallSignal({ ...incomingCallBanner, autoAccept: true });
-              setIncomingCallBanner(null);
-              setIsMessengerOpen(true);
-            }}
-            onDecline={() => {
-              triggerWarningHaptic();
-              stopIncomingCallRingtone();
-              if (incomingCallBanner?.senderId) {
-                const ch = supabase.channel(`call-signals-${incomingCallBanner.senderId}`);
-                ch.subscribe((st) => {
-                  if (st === 'SUBSCRIBED') {
-                    ch.send({ type: 'broadcast', event: 'signal', payload: { type: 'call-declined', senderId: session?.user?.id } });
-                    setTimeout(() => supabase.removeChannel(ch), 500);
-                  }
-                });
-              }
-              setIncomingCallBanner(null);
-              setIncomingCallSignal(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Incoming Message Toast Banner */}
-      <AnimatePresence>
-        {incomingMessageToast && (
-          <motion.div
-            initial={{ opacity: 0, y: -60 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -60 }}
-            onClick={() => {
-              setIsMessengerOpen(true);
-              setIncomingMessageToast(null);
-              setUnreadMsgCount(0);
-            }}
-            className={`fixed left-1/2 -translate-x-1/2 z-[150] w-[92%] max-w-md border shadow-2xl rounded-2xl p-3.5 flex items-center gap-3 backdrop-blur-xl cursor-pointer transition-all ${activeTheme.cardBgClass} ${activeTheme.borderClass}`}
-            style={{
-              top: 'calc(env(safe-area-inset-top, 0px) + 0.85rem)'
-            }}
-          >
-            <div className="w-10 h-10 rounded-full overflow-hidden border bg-black/50 flex items-center justify-center flex-shrink-0" style={{ borderColor: activeTheme.accentColor }}>
-              {incomingMessageToast.senderAvatar ? (
-                <img src={incomingMessageToast.senderAvatar} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-white text-xs font-black">
-                  {incomingMessageToast.senderName.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-white truncate">{incomingMessageToast.senderName}</span>
-                <span className="text-[9px] font-bold uppercase" style={{ color: activeTheme.accentColor }}>Agora</span>
-              </div>
-              <p className="text-xs text-white/80 truncate mt-0.5">{incomingMessageToast.content}</p>
-            </div>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIncomingMessageToast(null);
-              }}
-              className="p-1.5 text-white/40 hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <FCMPushModal 
-        isOpen={isFCMModalOpen}
-        onClose={() => {
-          setIsFCMModalOpen(false);
-          setFcmRegistered(!!localStorage.getItem('gsi_fcm_token'));
-        }}
-        userId={session?.user?.id || ''}
+      {/* Bottom Navigation */}
+      <NavigationTabBar
+        activeTab={activeTab}
+        onTabChange={(newTab) => setActiveTab(newTab)}
+        activeTheme={activeTheme}
       />
 
-      {updateRelease && (
-        <AppUpdateModal
-          isOpen={isUpdateModalOpen}
-          release={updateRelease}
-          onClose={() => {
-            setIsUpdateModalOpen(false);
-            if (updateRelease) {
-              const targetVer = updateRelease.latestVersion || updateRelease.tag_name;
-              localStorage.setItem('gsi_dismissed_update_version', targetVer);
-            }
-          }}
-        />
-      )}
-
-      {/* Onboarding Tutorial Modal na primeira abertura */}
+      {/* Global Modals */}
       <AnimatePresence>
-        {showOnboarding && session && (
+        {/* Theme Selector Modal (Popup dialog, never covering screen on startup) */}
+        {isThemeModalOpen && (
+          <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-xl bg-[#0a0e17] border border-white/10 rounded-3xl p-6 shadow-2xl relative max-h-[85vh] overflow-y-auto"
+            >
+              <button
+                onClick={() => setIsThemeModalOpen(false)}
+                className="absolute top-5 right-5 text-white/50 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+              <ThemeSelector onThemeSelect={() => setIsThemeModalOpen(false)} />
+            </motion.div>
+          </div>
+        )}
+
+        {isMessengerOpen && (
+          <Messenger
+            isOpen={isMessengerOpen}
+            onClose={() => setIsMessengerOpen(false)}
+            currentUserId={session.user.id}
+            userName={userName}
+            userAvatar={profile?.avatar_url}
+            onlineUsers={onlineUsers}
+            initialTab={messengerTab}
+            initialDirectUserId={messengerTargetUserId}
+          />
+        )}
+
+        {showOnboarding && (
           <Onboarding
             onComplete={() => setShowOnboarding(false)}
-            userId={session?.user?.id}
-            onRequestNotifications={async () => {
-              try {
-                if (!Capacitor.isNativePlatform()) return true;
-                const token = await requestNativeNotificationPermission(session?.user?.id);
-                if (token) {
-                  setNotificationsEnabled(true);
-                  setFcmRegistered(true);
-                  return token;
-                }
-                return false;
-              } catch (err) {
-                console.warn('[Onboarding Notification] Error:', err);
-                return false;
-              }
-            }}
+            userId={session.user.id}
+            onRequestNotifications={requestPermission}
+          />
+        )}
+
+        {isFCMModalOpen && (
+          <FCMPushModal
+            isOpen={isFCMModalOpen}
+            onClose={() => setIsFCMModalOpen(false)}
+            userId={session.user.id}
+          />
+        )}
+
+        {isUpdateModalOpen && updateRelease && (
+          <AppUpdateModal
+            isOpen={isUpdateModalOpen}
+            onClose={() => setIsUpdateModalOpen(false)}
+            release={updateRelease}
+          />
+        )}
+
+        {/* Incoming Call Screen */}
+        {callState === 'incoming' && incomingCallUser && (
+          <IncomingCallScreen
+            callerName={incomingCallUser.full_name}
+            callerAvatar={incomingCallUser.avatar_url}
+            callType={incomingCallType}
+            onAccept={acceptCall}
+            onDecline={declineCall}
+          />
+        )}
+
+        {/* Active Call Screen */}
+        {callState !== 'idle' && callState !== 'incoming' && (
+          <ActiveCallScreen
+            callState={callState}
+            callType={callType}
+            callUser={callUser}
+            roomUrl={callRoomUrl}
+            isMuted={isCallMuted}
+            isCameraOff={isCallCameraOff}
+            isSpeakerOn={isSpeakerOn}
+            callDurationSec={callDurationSec}
+            onToggleMute={toggleMute}
+            onToggleCamera={toggleCamera}
+            onToggleSpeaker={toggleSpeaker}
+            onHangup={endCall}
+            localVideoRef={localVideoRef}
+            remoteVideoRef={remoteVideoRef}
+            remoteAudioRef={remoteAudioRef}
           />
         )}
       </AnimatePresence>

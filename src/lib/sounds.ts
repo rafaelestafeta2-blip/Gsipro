@@ -65,17 +65,67 @@ export const playNotificationSound = () => {
   } catch (e) {}
 };
 
+export const playMessageSentSound = () => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(900, now + 0.08);
+    gain.gain.setValueAtTime(0.04, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  } catch {}
+};
+
+export const playMessageReceivedSound = () => {
+  playNotificationSound();
+};
+
 
 let ringtoneInterval: any = null;
+let currentRingtoneCtx: AudioContext | null = null;
+let currentOscillators: OscillatorNode[] = [];
+let activeHtmlAudio: HTMLAudioElement | null = null;
+
+export const playActiveAudio = (url: string, volume: number = 0.5, loop: boolean = true): HTMLAudioElement => {
+  stopAllCallSounds();
+  const audio = new Audio(url);
+  audio.volume = volume;
+  audio.loop = loop;
+  activeHtmlAudio = audio;
+  audio.play().catch(e => console.warn('[Sounds] Audio play blocked/failed:', e));
+  return audio;
+};
 
 export const startIncomingCallRingtone = () => {
   stopIncomingCallRingtone();
   try {
     startCallVibration();
-    const playRingCycle = () => {
 
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const playRingCycle = () => {
+      // Clean up previous cycle audio if still running
+      currentOscillators.forEach(osc => {
+        try { osc.stop(); osc.disconnect(); } catch {}
+      });
+      currentOscillators = [];
+      if (currentRingtoneCtx) {
+        try { currentRingtoneCtx.close(); } catch {}
+        currentRingtoneCtx = null;
+      }
+
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtxClass) return;
+
+      const ctx = new AudioCtxClass();
+      currentRingtoneCtx = ctx;
       const now = ctx.currentTime;
+
       // Phone dual tone: 440Hz + 480Hz
       const playDualTone = (offset: number, dur: number) => {
         [440, 480].forEach(freq => {
@@ -89,17 +139,22 @@ export const startIncomingCallRingtone = () => {
           gain.gain.linearRampToValueAtTime(0.001, now + offset + dur);
           osc.connect(gain);
           gain.connect(ctx.destination);
+
           osc.start(now + offset);
           osc.stop(now + offset + dur);
+          currentOscillators.push(osc);
         });
       };
+
       playDualTone(0, 0.8);
       playDualTone(1.0, 0.8);
     };
 
     playRingCycle();
     ringtoneInterval = setInterval(playRingCycle, 3200);
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[Sounds] Erro ao iniciar ringtone:', e);
+  }
 };
 
 export const stopIncomingCallRingtone = () => {
@@ -108,4 +163,26 @@ export const stopIncomingCallRingtone = () => {
     clearInterval(ringtoneInterval);
     ringtoneInterval = null;
   }
+
+  currentOscillators.forEach(osc => {
+    try { osc.stop(); osc.disconnect(); } catch {}
+  });
+  currentOscillators = [];
+
+  if (currentRingtoneCtx) {
+    try { currentRingtoneCtx.close(); } catch {}
+    currentRingtoneCtx = null;
+  }
+
+  if (activeHtmlAudio) {
+    try {
+      activeHtmlAudio.pause();
+      activeHtmlAudio.currentTime = 0;
+    } catch {}
+    activeHtmlAudio = null;
+  }
+};
+
+export const stopAllCallSounds = () => {
+  stopIncomingCallRingtone();
 };

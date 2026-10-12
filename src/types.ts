@@ -121,6 +121,7 @@ export interface Message {
   reply_to?: ReplyInfo;
   reactions?: Record<string, string[]>; // emoji -> [user_id_1, user_id_2]
   sync_status?: 'synced' | 'pending' | 'sending' | 'failed';
+  is_read?: boolean;
 }
 
 export interface Block {
@@ -148,6 +149,7 @@ export interface GroupMember {
   user_id: string;
   role: 'admin' | 'member';
   joined_at: string;
+  profile?: Profile;
 }
 
 export interface GroupMessage {
@@ -157,6 +159,7 @@ export interface GroupMessage {
   content: string;
   type: 'text' | 'image' | 'audio' | 'location' | 'poll' | 'sticker' | 'weather';
   media_url?: string;
+  sender?: Profile;
   sticker_info?: {
     id: string;
     url: string;
