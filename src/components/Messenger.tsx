@@ -150,7 +150,51 @@ export default function Messenger({
     return () => clearInterval(timer);
   }, [viewingStatusGroup, currentStatusIndex, isStatusPaused]);
 
-  const handlePostStatus = () => {
+  // Load statuses from Supabase cloud database
+  const loadStatusesFromCloud = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('statuses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && Array.isArray(data)) {
+        const now = Date.now();
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        const active = data
+          .map((st: any) => ({
+            id: st.id,
+            userId: st.user_id,
+            userName: st.user_name || 'Utilizador',
+            userAvatar: st.user_avatar,
+            type: st.type || 'text',
+            content: st.content,
+            mediaUrl: st.media_url,
+            background: st.background,
+            caption: st.caption,
+            createdAt: st.created_at,
+            views: st.views || []
+          }))
+          .filter((st: any) => {
+            const age = now - new Date(st.createdAt).getTime();
+            return age < twentyFourHours;
+          });
+
+        if (active.length > 0) {
+          setStatuses(active);
+          localStorage.setItem('instachat_statuses', JSON.stringify(active));
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load statuses from cloud:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadStatusesFromCloud();
+  }, []);
+
+  const handlePostStatus = async () => {
     if (newStatusType === 'text' && !newStatusContent.trim()) return;
     if (newStatusType === 'image' && !newStatusMediaUrl.trim()) return;
 
@@ -168,15 +212,43 @@ export default function Messenger({
       views: []
     };
 
-    setStatuses([newStatus, ...statuses]);
+    const updated = [newStatus, ...statuses];
+    setStatuses(updated);
+    localStorage.setItem('instachat_statuses', JSON.stringify(updated));
     setShowCreateStatusModal(false);
     setNewStatusContent('');
     setNewStatusMediaUrl('');
     setNewStatusCaption('');
+
+    // Sync status to Supabase
+    try {
+      await supabase.from('statuses').insert([{
+        id: newStatus.id,
+        user_id: currentUserId,
+        user_name: userName,
+        user_avatar: userAvatar,
+        type: newStatusType,
+        content: newStatus.content || null,
+        media_url: newStatus.mediaUrl || null,
+        background: newStatus.background || null,
+        caption: newStatus.caption || null,
+        created_at: newStatus.createdAt,
+        views: []
+      }]);
+    } catch (err) {
+      console.warn('Error saving status to cloud:', err);
+    }
   };
 
-  const handleDeleteStatus = (id: string) => {
-    setStatuses(statuses.filter((s: any) => s.id !== id));
+  const handleDeleteStatus = async (id: string) => {
+    const updated = statuses.filter((s: any) => s.id !== id);
+    setStatuses(updated);
+    localStorage.setItem('instachat_statuses', JSON.stringify(updated));
+    try {
+      await supabase.from('statuses').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Error deleting status from cloud:', err);
+    }
   };
 
   useEffect(() => {
@@ -7087,8 +7159,13 @@ export default function Messenger({
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const url = URL.createObjectURL(file);
-                              setNewStatusMediaUrl(url);
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                if (event.target?.result) {
+                                  setNewStatusMediaUrl(event.target.result as string);
+                                }
+                              };
+                              reader.readAsDataURL(file);
                             }
                           }}
                         />

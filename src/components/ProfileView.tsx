@@ -191,6 +191,15 @@ export default function ProfileView({
   const [commentText, setCommentText] = useState('');
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
+  // Profile Cover Banner Modal State
+  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
+  const [bannerUrlInput, setBannerUrlInput] = useState('');
+  const [savingBanner, setSavingBanner] = useState(false);
+  const bannerFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if viewing own profile
+  const isOwnProfile = !userId || userId === currentUserId || (profile?.id && currentUserId && profile.id === currentUserId) || (profile?.id && userId && profile.id === userId);
+
   // Time Entries Editing
   const [selectedDayEntry, setSelectedDayEntry] = useState<{ day: number, entry?: TimeEntry } | null>(null);
   const [editHours, setEditHours] = useState('8');
@@ -209,6 +218,7 @@ export default function ProfileView({
     getProfile();
     getEntries();
     loadPostsAndSocialData();
+    checkFollowStatusAndSync();
     handleVisitorTracking();
   }, [userId, viewDate, currentUserId]);
 
@@ -263,6 +273,32 @@ export default function ProfileView({
     }
   };
 
+  const checkFollowStatusAndSync = async () => {
+    if (!currentUserId || currentUserId === userId) return;
+    try {
+      const { data, error } = await supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', userId)
+        .maybeSingle();
+
+      if (!error && data) {
+        setIsFollowing(true);
+        localStorage.setItem(`instachat_is_following_${userId}`, 'true');
+      } else if (!error && !data) {
+        setIsFollowing(false);
+        localStorage.setItem(`instachat_is_following_${userId}`, 'false');
+      } else {
+        const storedFollowing = localStorage.getItem(`instachat_is_following_${userId}`);
+        if (storedFollowing !== null) setIsFollowing(storedFollowing === 'true');
+      }
+    } catch {
+      const storedFollowing = localStorage.getItem(`instachat_is_following_${userId}`);
+      if (storedFollowing !== null) setIsFollowing(storedFollowing === 'true');
+    }
+  };
+
   const loadPostsAndSocialData = () => {
     try {
       // Bio local cache
@@ -277,20 +313,19 @@ export default function ProfileView({
       const storedPosts = localStorage.getItem(`instachat_posts_${userId}`);
       if (storedPosts) {
         const parsed = JSON.parse(storedPosts);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           setPosts(parsed);
           return;
         }
       }
-      if (userId === currentUserId) {
+      if (isOwnProfile) {
         setPosts(INITIAL_SAMPLE_POSTS);
         localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify(INITIAL_SAMPLE_POSTS));
       } else {
         setPosts([]);
-        localStorage.setItem(`instachat_posts_${userId}`, JSON.stringify([]));
       }
     } catch {
-      setPosts(userId === currentUserId ? INITIAL_SAMPLE_POSTS : []);
+      setPosts(isOwnProfile ? INITIAL_SAMPLE_POSTS : []);
     }
   };
 
@@ -306,6 +341,32 @@ export default function ProfileView({
       } catch (err) {
         console.warn('Cloud posts sync pending offline:', err);
       }
+    }
+  };
+
+  const handleSaveBanner = async (newBannerUrl: string) => {
+    triggerLightHaptic();
+    setSavingBanner(true);
+    try {
+      const updatedProfile = { ...(profile || {} as Profile), banner_url: newBannerUrl };
+      setProfile(updatedProfile as Profile);
+      localStorage.setItem(`instachat_profile_${userId}`, JSON.stringify(updatedProfile));
+      if (onProfileUpdate) onProfileUpdate({ banner_url: newBannerUrl });
+
+      if (isOnline()) {
+        await supabase.from('profiles').update({
+          banner_url: newBannerUrl,
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
+      }
+      triggerSuccessHaptic();
+      setIsBannerModalOpen(false);
+    } catch (err) {
+      console.warn('Error saving banner to cloud:', err);
+      triggerSuccessHaptic();
+      setIsBannerModalOpen(false);
+    } finally {
+      setSavingBanner(false);
     }
   };
 
@@ -386,9 +447,16 @@ export default function ProfileView({
     const nextCount = nextState ? followersCount + 1 : Math.max(0, followersCount - 1);
     setFollowersCount(nextCount);
     localStorage.setItem(`instachat_is_following_${userId}`, String(nextState));
+    localStorage.setItem(`instachat_followers_count_${userId}`, String(nextCount));
 
     if (isOnline()) {
       try {
+        if (nextState) {
+          await supabase.from('follows').insert([{ follower_id: currentUserId, following_id: userId }]);
+        } else {
+          await supabase.from('follows').delete().eq('follower_id', currentUserId).eq('following_id', userId);
+        }
+
         await supabase.from('profiles').update({
           followers_count: nextCount,
           updated_at: new Date().toISOString()
@@ -811,24 +879,19 @@ export default function ProfileView({
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e17] via-[#0a0e17]/50 to-transparent"></div>
 
                 {/* Edit Banner Button (Only for own profile) */}
-                {currentUserId === userId && (
+                {isOwnProfile && (
                   <button
                     type="button"
                     onClick={() => {
-                      const newBanner = prompt('Insira o link da nova capa de fundo (banner):', profile?.banner_url || '');
-                      if (newBanner !== null) {
-                        triggerLightHaptic();
-                        const updatedProfile = { ...profile, banner_url: newBanner };
-                        setProfile(updatedProfile);
-                        localStorage.setItem(`instachat_profile_${userId}`, JSON.stringify(updatedProfile));
-                        if (onProfileUpdate) onProfileUpdate({ banner_url: newBanner });
-                        triggerSuccessHaptic();
-                      }
+                      triggerLightHaptic();
+                      setBannerUrlInput(profile?.banner_url || '');
+                      setIsBannerModalOpen(true);
                     }}
-                    className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/20 text-white p-2 rounded-full shadow-lg opacity-80 hover:opacity-100 transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider z-20"
+                    className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white py-1.5 px-3 rounded-full shadow-xl transition-all flex items-center gap-1.5 text-xs font-black uppercase tracking-wider z-20 group active:scale-95 cursor-pointer"
                     title="Alterar capa de fundo"
                   >
-                    <Camera size={14} /> <span className="hidden sm:inline">Editar Capa</span>
+                    <Camera size={14} className="text-[#d4af37] group-hover:rotate-12 transition-transform" />
+                    <span>Editar Capa</span>
                   </button>
                 )}
               </div>
@@ -1765,6 +1828,157 @@ export default function ProfileView({
                     </div>
                   ))
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Profile Cover Banner Edit Modal */}
+      <AnimatePresence>
+        {isBannerModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none"
+            onClick={() => setIsBannerModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-[#111b21] border border-white/10 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5 text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Camera className="text-[#d4af37]" size={20} />
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white">Editar Capa do Perfil</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsBannerModalOpen(false)}
+                  className="p-1.5 hover:bg-white/10 rounded-full text-white/60 hover:text-white transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Preview Box */}
+              <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-white/10 bg-slate-900 group">
+                {bannerUrlInput ? (
+                  <img src={bannerUrlInput} className="w-full h-full object-cover" alt="Preview Capa" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-r from-cyan-900/40 via-blue-900/30 to-purple-900/40 flex items-center justify-center">
+                    <span className="text-xs text-white/50 font-bold">Sem Foto de Capa (Usa Degradê Padrão)</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e17] via-[#0a0e17]/40 to-transparent"></div>
+              </div>
+
+              {/* Device File Upload */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block">
+                  1. Carregar Foto do Teu Dispositivo / Galeria
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={bannerFileInputRef}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        if (event.target?.result) {
+                          setBannerUrlInput(event.target.result as string);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => bannerFileInputRef.current?.click()}
+                  className="w-full py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#d4af37] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                >
+                  <Upload size={16} className="text-[#d4af37]" />
+                  <span>Escolher Fotografia da Galeria</span>
+                </button>
+              </div>
+
+              {/* Preset Gallery */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block">
+                  2. Ou Escolha uma Capa Estilizada
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { title: 'Cyber Steel', url: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1200&auto=format&fit=crop' },
+                    { title: 'Néon Obra', url: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=1200&auto=format&fit=crop' },
+                    { title: 'Sunset Dark', url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=1200&auto=format&fit=crop' },
+                    { title: 'Golden Glow', url: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=1200&auto=format&fit=crop' },
+                    { title: 'Carbon Minimal', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.url}
+                      type="button"
+                      onClick={() => setBannerUrlInput(preset.url)}
+                      className="h-14 rounded-xl overflow-hidden border border-white/10 relative group hover:border-[#d4af37] transition-all cursor-pointer"
+                    >
+                      <img src={preset.url} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-white drop-shadow text-center">{preset.title}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* URL Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest block">
+                  3. Ou Inserir Link/URL Direto
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://exemplo.com/minha-foto.jpg"
+                  value={bannerUrlInput}
+                  onChange={(e) => setBannerUrlInput(e.target.value)}
+                  className="w-full bg-[#0a0e17] border border-white/10 rounded-2xl p-3 text-xs font-mono text-white outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              {/* Modal Action Buttons */}
+              <div className="flex gap-2 pt-2 border-t border-white/10">
+                {bannerUrlInput && (
+                  <button
+                    type="button"
+                    onClick={() => setBannerUrlInput('')}
+                    className="py-2.5 px-4 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Trash2 size={14} /> Remover
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsBannerModalOpen(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={savingBanner}
+                  onClick={() => handleSaveBanner(bannerUrlInput)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                >
+                  {savingBanner ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  <span>Guardar Capa</span>
+                </button>
               </div>
             </motion.div>
           </motion.div>
