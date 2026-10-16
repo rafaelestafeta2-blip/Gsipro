@@ -891,7 +891,7 @@ export default function ProfileView({
               
               {/* Cover Photo Banner with Gradient Fade (Degradê ao Fundo) */}
               <div className="relative w-full h-40 sm:h-52 bg-slate-900 overflow-hidden group">
-                {profile?.banner_url ? (
+                {profile?.banner_url?.trim() ? (
                   <img src={profile.banner_url} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-r from-cyan-900/40 via-blue-900/30 to-purple-900/40 flex items-center justify-center">
@@ -940,7 +940,7 @@ export default function ProfileView({
                     title={profile?.avatar_url ? "Clique para ver a foto de perfil em tela cheia" : undefined}
                   >
                     <div className="w-full h-full rounded-full overflow-hidden border border-white/10 bg-black/50 relative">
-                      {profile?.avatar_url ? (
+                      {profile?.avatar_url?.trim() ? (
                         <>
                           <img src={profile.avatar_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
@@ -1111,7 +1111,7 @@ export default function ProfileView({
                         title={`${visitor.full_name} (${visitor.role || 'Visitante'})`}
                       >
                         <div className="w-7 h-7 rounded-full border-2 border-slate-900 overflow-hidden bg-slate-800 flex items-center justify-center text-[9px] font-black text-white/80">
-                          {visitor.avatar_url ? (
+                          {visitor.avatar_url?.trim() ? (
                             <img src={visitor.avatar_url} className="w-full h-full object-cover" />
                           ) : (
                             visitor.full_name?.charAt(0).toUpperCase() || 'U'
@@ -1640,7 +1640,7 @@ export default function ProfileView({
                     {selectedPost.comments.map(comm => (
                       <div key={comm.id} className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-start gap-2.5">
                         <div className="w-6 h-6 rounded-full overflow-hidden bg-black/60 flex-shrink-0">
-                          {comm.author_avatar ? (
+                          {comm.author_avatar?.trim() ? (
                             <img src={comm.author_avatar} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-[9px] font-black text-white/40">
@@ -1744,7 +1744,7 @@ export default function ProfileView({
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full border border-white/10 overflow-hidden bg-black/40 flex items-center justify-center text-xs font-black text-white/70">
-                          {v.avatar_url ? (
+                          {v.avatar_url?.trim() ? (
                             <img src={v.avatar_url} className="w-full h-full object-cover" />
                           ) : (
                             v.full_name?.charAt(0).toUpperCase() || 'U'
@@ -1807,7 +1807,7 @@ export default function ProfileView({
 
               {/* Preview Box */}
               <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-white/10 bg-slate-900 group">
-                {bannerUrlInput ? (
+                {bannerUrlInput?.trim() ? (
                   <img src={bannerUrlInput} className="w-full h-full object-cover" alt="Preview Capa" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-r from-cyan-900/40 via-blue-900/30 to-purple-900/40 flex items-center justify-center">

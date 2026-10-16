@@ -9,9 +9,12 @@ import {
   MapPin, 
   Sun, 
   X, 
-  Loader2 
+  Loader2,
+  BarChart3,
+  Image as ImageIcon,
+  Plus
 } from 'lucide-react';
-import { ReplyInfo, WeatherData } from '../../../shared/types';
+import { ReplyInfo, WeatherData, PollData } from '../../../shared/types';
 import { UniversalAudioRecorder } from '../../../shared/lib/audioRecorder';
 import { captureNativePhoto } from '../../../shared/lib/cameraService';
 import { getCurrentLocation } from '../../../shared/lib/locationService';
@@ -19,6 +22,7 @@ import { getWeatherByCoordinates } from '../../../shared/services/weatherService
 import { triggerLightHaptic, triggerMediumHaptic } from '../../../shared/lib/haptics';
 import { showGlobalToast } from '../../../shared/lib/ToastContext';
 import { ANIMATED_STICKERS_PACKS } from '../../../data/animatedStickers';
+import CreatePollModal from './CreatePollModal';
 
 interface ChatMessageInputProps {
   onSendMessage: (
@@ -44,10 +48,13 @@ export default function ChatMessageInput({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
 
   const recorderRef = useRef<UniversalAudioRecorder | null>(null);
   const timerRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     recorderRef.current = new UniversalAudioRecorder();
@@ -63,6 +70,7 @@ export default function ChatMessageInput({
     onSendMessage(text.trim(), 'text');
     setText('');
     setShowStickerPicker(false);
+    setShowAttachmentMenu(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -85,7 +93,7 @@ export default function ChatMessageInput({
         }, 1000);
       } else {
         setIsRecording(false);
-        showGlobalToast('Acesso ao microfone necessário para gravar áudio. Verifique as permissões do navegador.', 'warning');
+        showGlobalToast('Acesso ao microfone necessário para gravar áudio. Verifique as permissões.', 'warning');
       }
     } catch {
       setIsRecording(false);
@@ -96,25 +104,49 @@ export default function ChatMessageInput({
   const stopRecording = async (cancel = false) => {
     if (!recorderRef.current || !isRecording) return;
     if (timerRef.current) clearInterval(timerRef.current);
-    const audioUrl = await recorderRef.current.stopRecording();
+    const audioData = await recorderRef.current.stopRecording();
     setIsRecording(false);
 
-    if (!cancel && audioUrl) {
+    if (!cancel && audioData?.url) {
       await triggerLightHaptic();
-      onSendMessage('🎤 Mensagem de voz', 'audio', audioUrl);
+      onSendMessage('🎤 Mensagem de voz', 'audio', audioData.url);
     }
   };
 
   const handleCameraCapture = async () => {
+    setShowAttachmentMenu(false);
     await triggerLightHaptic();
     const photoFile = await captureNativePhoto();
     if (photoFile) {
-      const photoUrl = URL.createObjectURL(photoFile);
-      onSendMessage('📷 Foto enviada', 'image', photoUrl);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result) {
+          onSendMessage('📷 Foto enviada', 'image', reader.result as string);
+        }
+      };
+      reader.readAsDataURL(photoFile);
+    } else {
+      fileInputRef.current?.click();
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setShowAttachmentMenu(false);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        const isVideo = file.type.startsWith('video/');
+        onSendMessage(isVideo ? '📹 Vídeo enviado' : '📷 Foto enviada', 'image', reader.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleShareLocation = async () => {
+    setShowAttachmentMenu(false);
     try {
       setIsLocating(true);
       await triggerLightHaptic();
@@ -134,6 +166,7 @@ export default function ChatMessageInput({
   };
 
   const handleShareWeather = async () => {
+    setShowAttachmentMenu(false);
     try {
       setIsLocating(true);
       await triggerLightHaptic();
@@ -151,8 +184,22 @@ export default function ChatMessageInput({
     }
   };
 
+  const handleCreatePoll = (poll: PollData) => {
+    setShowPollModal(false);
+    setShowAttachmentMenu(false);
+    onSendMessage(`📊 Sondagem: ${poll.question}`, 'poll', undefined, { poll });
+  };
+
   return (
-    <div className="border-t border-white/5 bg-[#1c2431]/80 backdrop-blur-md p-3 relative">
+    <div className="border-t border-white/5 bg-[#1c2431]/95 backdrop-blur-md p-3 relative z-30">
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileUpload} 
+        accept="image/*,video/*" 
+        className="hidden" 
+      />
+
       {/* Reply Preview */}
       {replyTo && (
         <div className="mb-2 p-2 rounded-xl bg-white/5 border-l-4 border-[#d4af37] flex items-center justify-between">
@@ -170,7 +217,7 @@ export default function ChatMessageInput({
 
       {/* Animated Stickers Drawer */}
       {showStickerPicker && (
-        <div className="mb-2 p-3 rounded-2xl bg-[#0a0e17] border border-white/10 max-h-48 overflow-y-auto grid grid-cols-5 gap-2">
+        <div className="mb-2 p-3 rounded-2xl bg-[#0a0e17] border border-white/10 max-h-48 overflow-y-auto grid grid-cols-5 gap-2 shadow-2xl">
           {ANIMATED_STICKERS_PACKS.flatMap(p => p.stickers).map(st => (
             <button
               key={st.id}
@@ -178,11 +225,75 @@ export default function ChatMessageInput({
                 onSendMessage(st.title, 'image', st.url);
                 setShowStickerPicker(false);
               }}
-              className="p-1 hover:bg-white/10 rounded-xl transition-all flex items-center justify-center"
+              className="p-1 hover:bg-white/10 rounded-xl transition-all flex items-center justify-center cursor-pointer"
             >
               <img src={st.url} alt={st.title} className="w-12 h-12 object-contain" />
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Attachment Menu Popup (WhatsApp Style) */}
+      {showAttachmentMenu && (
+        <div className="mb-3 p-3 rounded-3xl bg-[#0a0e17] border border-white/10 shadow-2xl grid grid-cols-3 gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <button
+            onClick={handleCameraCapture}
+            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-300 hover:scale-105 transition-all cursor-pointer"
+          >
+            <Camera size={22} />
+            <span className="text-[10px] font-black uppercase tracking-wider">Câmara</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowAttachmentMenu(false);
+              fileInputRef.current?.click();
+            }}
+            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30 text-cyan-300 hover:scale-105 transition-all cursor-pointer"
+          >
+            <ImageIcon size={22} />
+            <span className="text-[10px] font-black uppercase tracking-wider">Galeria</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowAttachmentMenu(false);
+              setShowPollModal(true);
+            }}
+            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-500/20 border border-[#d4af37]/30 text-[#d4af37] hover:scale-105 transition-all cursor-pointer"
+          >
+            <BarChart3 size={22} />
+            <span className="text-[10px] font-black uppercase tracking-wider">Sondagem</span>
+          </button>
+
+          <button
+            onClick={handleShareLocation}
+            disabled={isLocating}
+            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 text-emerald-300 hover:scale-105 transition-all cursor-pointer"
+          >
+            {isLocating ? <Loader2 size={22} className="animate-spin" /> : <MapPin size={22} />}
+            <span className="text-[10px] font-black uppercase tracking-wider">Localização</span>
+          </button>
+
+          <button
+            onClick={handleShareWeather}
+            disabled={isLocating}
+            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 border border-orange-500/30 text-amber-300 hover:scale-105 transition-all cursor-pointer"
+          >
+            <Sun size={22} />
+            <span className="text-[10px] font-black uppercase tracking-wider">Clima Obra</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowAttachmentMenu(false);
+              setShowStickerPicker(true);
+            }}
+            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 text-indigo-300 hover:scale-105 transition-all cursor-pointer"
+          >
+            <Smile size={22} />
+            <span className="text-[10px] font-black uppercase tracking-wider">Stickers</span>
+          </button>
         </div>
       )}
 
@@ -196,14 +307,16 @@ export default function ChatMessageInput({
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => stopRecording(true)}
-                className="p-1 text-white/40 hover:text-white text-xs font-bold"
+                className="p-1 text-white/40 hover:text-white text-xs font-bold cursor-pointer"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={() => stopRecording(false)}
-                className="p-1.5 rounded-full bg-red-500 text-white"
+                className="p-1.5 rounded-full bg-red-500 text-white cursor-pointer"
               >
                 <Square size={14} />
               </button>
@@ -211,36 +324,32 @@ export default function ChatMessageInput({
           </div>
         ) : (
           <>
+            {/* Attachment (+) Button */}
             <button
-              onClick={() => setShowStickerPicker(!showStickerPicker)}
-              className="p-2 text-white/50 hover:text-[#d4af37] transition-colors"
+              type="button"
+              onClick={() => {
+                triggerLightHaptic();
+                setShowAttachmentMenu(!showAttachmentMenu);
+                setShowStickerPicker(false);
+              }}
+              className={`p-2 rounded-xl transition-all cursor-pointer ${
+                showAttachmentMenu ? 'bg-[#d4af37] text-black rotate-45' : 'text-white/60 hover:text-[#d4af37]'
+              }`}
+              title="Anexar Ficheiro ou Sondagem"
+            >
+              <Plus size={20} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowStickerPicker(!showStickerPicker);
+                setShowAttachmentMenu(false);
+              }}
+              className="p-2 text-white/50 hover:text-[#d4af37] transition-colors cursor-pointer"
+              title="Stickers & Emojis"
             >
               <Smile size={20} />
-            </button>
-
-            <button
-              onClick={handleCameraCapture}
-              className="p-2 text-white/50 hover:text-[#d4af37] transition-colors"
-            >
-              <Camera size={20} />
-            </button>
-
-            <button
-              onClick={handleShareLocation}
-              disabled={isLocating}
-              className="p-2 text-white/50 hover:text-[#d4af37] transition-colors"
-              title="Partilhar Localização"
-            >
-              {isLocating ? <Loader2 size={20} className="animate-spin text-[#d4af37]" /> : <MapPin size={20} />}
-            </button>
-
-            <button
-              onClick={handleShareWeather}
-              disabled={isLocating}
-              className="p-2 text-white/50 hover:text-[#d4af37] transition-colors"
-              title="Partilhar Clima"
-            >
-              <Sun size={20} />
             </button>
 
             <div className="flex-1 relative">
@@ -256,16 +365,19 @@ export default function ChatMessageInput({
 
             {text.trim() ? (
               <button
+                type="button"
                 onClick={handleSend}
-                className="w-10 h-10 rounded-2xl flex items-center justify-center text-black shadow-lg"
+                className="w-10 h-10 rounded-2xl flex items-center justify-center text-black shadow-lg cursor-pointer"
                 style={{ backgroundColor: accentColor }}
               >
                 <Send size={16} />
               </button>
             ) : (
               <button
+                type="button"
                 onClick={startRecording}
-                className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-[#d4af37]/20 text-white/70 hover:text-[#d4af37] flex items-center justify-center transition-all"
+                className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-[#d4af37]/20 text-white/70 hover:text-[#d4af37] flex items-center justify-center transition-all cursor-pointer"
+                title="Gravar Mensagem de Voz"
               >
                 <Mic size={18} />
               </button>
@@ -273,6 +385,15 @@ export default function ChatMessageInput({
           </>
         )}
       </div>
+
+      {/* Poll Modal */}
+      {showPollModal && (
+        <CreatePollModal
+          isOpen={showPollModal}
+          onClose={() => setShowPollModal(false)}
+          onCreatePoll={handleCreatePoll}
+        />
+      )}
     </div>
   );
 }

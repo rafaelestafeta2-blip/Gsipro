@@ -101,14 +101,14 @@ const CachedImage = memo(function CachedImage({
         </div>
       )}
 
-      {hasError ? (
+      {!displaySrc || hasError ? (
         <div className="flex flex-col items-center justify-center min-h-[140px] min-w-[160px] p-4 bg-black/40 text-center text-white/50 text-xs">
           <ImageIcon size={20} className="mb-1 text-white/30" />
-          <span>Toque para recarregar</span>
+          <span>Imagem indisponível</span>
         </div>
       ) : isVisible ? (
         <img
-          src={displaySrc}
+          src={displaySrc || undefined}
           alt={alt}
           loading="lazy"
           decoding="async"

@@ -160,6 +160,7 @@ export interface GroupMessage {
   type: 'text' | 'image' | 'audio' | 'location' | 'poll' | 'sticker' | 'weather';
   media_url?: string;
   sender?: Profile;
+  is_read?: boolean;
   sticker_info?: {
     id: string;
     url: string;
