@@ -14,9 +14,17 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="INSTA CHAT" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <style>
+      html, body, #root {
+        background-color: #0a0e17 !important;
+        color: #ffffff;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+      }
+    </style>
   </head>
-  <body>
+  <body class="bg-[#0a0e17] text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

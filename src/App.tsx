@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { App as CapApp } from '@capacitor/app';
 import { Zap, Bell, X } from 'lucide-react';
 
@@ -118,6 +119,9 @@ export default function App() {
     StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
     StatusBar.setBackgroundColor({ color: '#00000000' }).catch(() => {});
     StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+
+    // Dismiss splash screen cleanly
+    SplashScreen.hide().catch(() => {});
 
     checkForAppUpdate().then(release => {
       if (release?.hasUpdate) {

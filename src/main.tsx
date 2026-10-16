@@ -1,8 +1,23 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
 import App from './App';
 import './index.css';
 import { ToastProvider } from './shared/lib/ToastContext';
+
+// Ensure splash screen does not get stuck on Android
+if (typeof window !== 'undefined') {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      setTimeout(() => {
+        SplashScreen.hide().catch(() => {});
+      }, 500);
+    }
+  } catch (err) {
+    console.warn('[SplashScreen] init hide note:', err);
+  }
+}
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
